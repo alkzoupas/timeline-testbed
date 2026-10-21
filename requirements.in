@@ -1,0 +1,29 @@
+# Top-level dependencies for .venv (compiled to requirements.txt with `uv pip compile`).
+# The vendored package is not installed; `make venv` puts its source on the path with a .pth
+# file, so nothing is ever written into vendor/.
+
+# Runtime dependencies of vendor/entitlement-shield (its pyproject.toml, at fd5deca).
+# fastapi, uvicorn, jinja2, python-multipart, anthropic, openai and httpx serve only its API,
+# console and provider code and its test suite; this project makes no API calls.
+sqlalchemy>=2.0
+pydantic>=2.7
+networkx>=3.3
+polars>=1.0
+pyyaml>=6.0
+fastapi>=0.110
+jinja2>=3.1
+python-multipart>=0.0.9
+uvicorn>=0.29
+anthropic>=1.0
+openai>=1.0
+httpx>=0.27
+
+# Analysis
+numpy
+scikit-learn>=1.5
+
+# Development
+pytest>=8.0
+ruff>=0.5
+mypy>=1.10
+types-PyYAML>=6.0

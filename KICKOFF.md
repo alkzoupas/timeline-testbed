@@ -9,10 +9,11 @@ effort: `claude --model claude-opus-5-5 --effort xhigh`.
 > read its `data/` folder.
 >
 > **Step 1, no code: spec review.** Write `reports/M0-spec-review.md`, one page:
+>
 > - (a) The claim in SPEC §2, in your own words, and the result that would falsify it.
 > - (b) Up to 10 problems, ambiguities or risks in SPEC.md, ranked, each with a proposed fix. Look
->   especially at the family catalogue (§5.2), the channel check (§5.4), the render budget (§6.2) and
->   the gates (§7.1).
+> especially at the family catalogue (§5.2), the channel check (§5.4), the render budget (§6.2) and
+> the gates (§7.1).
 > - (c) Anything you think won't work on this machine, and how you'd check it cheaply.
 > - (d) Recommendations for the open items in SPEC §12.
 >

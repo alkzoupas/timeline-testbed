@@ -1,0 +1,42 @@
+# Tool configuration only. The project is not installed: `make venv` puts the repo root and the
+# vendored backend on the path with a .pth file (see requirements.in).
+
+[project]
+name = "timeline-testbed"
+version = "0.0.0"
+requires-python = ">=3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+src = [".", "vendor/entitlement-shield/backend"]
+# render_vendored.py is a verbatim copy of vendored code: never lint-fix or reformat it.
+extend-exclude = ["vendor", "testbed/pipeline/render_vendored.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["testbed"]
+known-third-party = ["app"]
+
+[tool.mypy]
+python_version = "3.14"
+mypy_path = "vendor/entitlement-shield/backend"
+files = ["testbed", "tests"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+check_untyped_defs = true
+
+# The vendored package is read-only: use its types, never report its errors.
+[[tool.mypy.overrides]]
+module = ["app.*"]
+follow_imports = "silent"
+
+# networkx and scikit-learn ship no type stubs.
+[[tool.mypy.overrides]]
+module = ["networkx.*", "sklearn.*"]
+ignore_missing_imports = true

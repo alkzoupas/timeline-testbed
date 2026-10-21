@@ -23,13 +23,15 @@ and STATUS.md first. Read DECISIONS.md and `context/` as needed.
   `runs/`, without the owner's go.
 - **Secret-guard blocks are final.**
 
-## Standing permissions (owner: confirm or edit before the first session)
+## Standing permissions (confirmed by the owner, 2026-10-21)
 
 - `make test`, `make lint` and `make typecheck`, at any time. They run offline and write only to
   temporary directories and caches.
 - Generating development worlds and running the label-free pipeline into `runs/` (gitignored): persist,
   detect, units, render, features, and zero-shot or probe inference on local models already present.
 - Reading development-world labels in `testbed/eval/`, for development, health checks and gates.
+- Running the existing `~/venvs/es-p6-train` read-only (MLX inference and tokenizer counts), with no
+  package changes.
 - Training runs (R3) need the owner's go per run, with M3's estimate of how long they'll take.
 
 ## Delegation and reviews
