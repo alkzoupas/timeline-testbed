@@ -1,8 +1,9 @@
 # Kickoff prompt
 
-Paste the quoted text into a new Claude Code session (Opus) started in this folder.
+Paste the quoted text into a new Claude Code session started in this folder on Opus 5.5 at xhigh
+effort: `claude --model claude-opus-5-5 --effort xhigh`.
 
-> You're the implementer of a new project at `~/code/timeline-testbed`. Read AGENTS.md, SPEC.md,
+> You're the coordinator of a new project at `~/code/timeline-testbed`. Read AGENTS.md, SPEC.md,
 > STATUS.md, DECISIONS.md and everything in `context/`. The predecessor repo is
 > `~/code/entitlement-shield`. Don't read it except for paths named in the `context/` files, and never
 > read its `data/` folder.
@@ -17,6 +18,6 @@ Paste the quoted text into a new Claude Code session (Opus) started in this fold
 >
 > Then stop and ask me to decide.
 >
-> **Step 2, after my answers: M0 only** (SPEC §10). Installs need my go in that turn. When M0's exit
-> criteria are met, report them with the actual command summaries and exit codes, update STATUS.md,
-> and stop.
+> **Step 2, after my answers: M0 only** (SPEC §10), done yourself without workers. Installs need my
+> go in that turn. When M0's exit criteria are met, report them with the actual command summaries
+> and exit codes, update STATUS.md, and stop.
