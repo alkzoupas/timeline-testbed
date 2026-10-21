@@ -1,0 +1,12 @@
+# Worlds, stores, model outputs: never committed or indexed.
+/runs/
+*.db
+*.db-journal
+
+# Local environments and caches
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
