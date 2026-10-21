@@ -26,8 +26,7 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
 
 ## Open owner decisions
 
-- The secret guard blocks `tokenizer.json` in the HF cache; render sizing (M1) and R1–R3 need it.
-  Allowlist it, or the owner runs the counts.
+- None. (The HF-cache `tokenizer.json` is now allowlisted in the secret guard; see DECISIONS.)
 
 ## Last checks (2026-10-21)
 

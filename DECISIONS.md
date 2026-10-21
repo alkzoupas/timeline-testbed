@@ -22,3 +22,4 @@ One line each: date · who · decision · link.
 - 2026-10-21 · owner · One owner-written family after the M6 freeze, as a separate generator module; v1 families must regenerate byte-identically, so earlier worlds stay valid · SPEC §12
 - 2026-10-21 · owner · No cross-vendor review of SPEC v0.2; the first one is the M1 freeze · AGENTS.md "Delegation and reviews"
 - 2026-10-21 · owner · No cross-vendor review of M0; the M1 freeze review's scope adds `testbed/pipeline/detect.py` (the runtime patch of the vendored detector) and `testbed/pipeline/units.py` · AGENTS.md "Delegation and reviews", `reports/M0.md`
+- 2026-10-21 · owner · Secret guard allowlists `tokenizer.json` under `~/.cache/huggingface/hub/`, for now (render sizing, R1–R3). Exact basename only: `tokenizer_config.json` and the cache's auth files stay blocked · `~/.claude/hooks/secret_guard.py`
