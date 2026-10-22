@@ -36,7 +36,8 @@ check_untyped_defs = true
 module = ["app.*"]
 follow_imports = "silent"
 
-# networkx and scikit-learn ship no type stubs.
+# networkx and scikit-learn ship no type stubs. MLX lives only in the es-p6-train venv: mlx_child.py
+# imports it inside functions, and this venv never has it.
 [[tool.mypy.overrides]]
-module = ["networkx.*", "sklearn.*"]
+module = ["networkx.*", "sklearn.*", "mlx.*", "mlx_lm.*", "mlx_lm_lora.*"]
 ignore_missing_imports = true
