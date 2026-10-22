@@ -338,6 +338,66 @@ def test_paired_differences_use_the_stronger_f64_and_the_same_resamples() -> Non
     assert report["differences"]["in_family"]["f64_trees_minus_f64_logistic"]["point"] == 0.0
 
 
+def test_primary_comparisons_and_boot_on_known_scores() -> None:
+    units = make_units(2, 2, oracle=False)
+    comps = r0.primary_comparisons(units)
+    assert list(comps) == ["A", "B"]
+    pair = np.array([u.pair for u in units])
+    for side, pairs in (("A", T_A), ("B", T_B)):  # the side's T units only, split by class
+        c = comps[side]
+        assert set(pair[c.pos]) == set(pair[c.neg]) == set(pairs)
+        assert all(units[i].positive for i in c.pos) and not any(units[i].positive for i in c.neg)
+        assert c.w_pos.shape == (r0.N_BOOT, 4) and c.w_neg.shape == (r0.N_BOOT, 4)
+    point, boot = r0.primary_boot(_two_side_scores(units)[("detector", "held_out")], comps)
+    assert point == 0.75  # side A 0.5, side B 1.0
+    assert boot.shape == (r0.N_BOOT,) and 0.5 <= boot.min() <= boot.max() <= 1.0
+    assert np.array_equal(  # one draw, from BOOT_SEED, over (side, class) strata
+        np.concatenate([comps["A"].w_pos, comps["A"].w_neg], axis=1).sum(axis=1),
+        np.full(r0.N_BOOT, 8),
+    )
+    with pytest.raises(ValueError, match="primary: side"):
+        r0.primary_comparisons([u for u in units if u.pair not in T_B])
+
+
+def test_evaluate_reports_extra_rungs_and_paired_differences() -> None:
+    units = make_units(8, 16, oracle=False)
+    rng = np.random.default_rng(7)
+    pos = np.array([u.positive for u in units])
+    scores = same_scores(rng.random(len(units)))
+    scores[("probe", "held_out")] = rng.random(len(units)) + 0.8 * pos
+    scores[("probe", "in_family")] = scores[("probe", "held_out")].copy()
+    rungs = (*RUNGS, "probe")
+    plain = r0.evaluate(units, {k: v for k, v in scores.items() if k[0] != "probe"})
+    report = r0.evaluate(
+        units,
+        scores,
+        rungs=rungs,
+        extra_differences=[("probe", "f64_logistic"), ("probe", "detector")],
+    )
+    assert report["regimes"]["held_out"]["probe"]["primary"]["lo"] > 0.5
+    assert report["regimes"]["held_out"]["detector"] == plain["regimes"]["held_out"]["detector"]
+    d = report["differences"]["held_out"]
+    assert {"probe_minus_f64_logistic", "probe_minus_detector"} <= set(d)
+    probe = report["regimes"]["held_out"]["probe"]["primary"]["auc"]
+    base = report["regimes"]["held_out"]["f64_logistic"]["primary"]["auc"]
+    assert d["probe_minus_f64_logistic"]["point"] == pytest.approx(probe - base)
+    assert 0 < d["probe_minus_f64_logistic"]["lo"] < d["probe_minus_f64_logistic"]["hi"]
+    assert (d["probe_minus_detector"]["n_pos"], d["probe_minus_detector"]["n_neg"]) == (32, 64)
+    # the default differences are untouched by the extra ones
+    assert (
+        d["f64_trees_minus_f64_logistic"]
+        == plain["differences"]["held_out"]["f64_trees_minus_f64_logistic"]
+    )
+    for a, b in ((("probe", "oracle")), ("probe", "nope"), ("nope", "probe")):
+        with pytest.raises(ValueError, match="two real rungs"):
+            r0.evaluate(units, scores, rungs=rungs, extra_differences=[(a, b)])
+    with pytest.raises(ValueError, match="rung x regime"):  # scores must match `rungs` exactly
+        r0.evaluate(units, scores)
+    only_random = {k: v for k, v in scores.items() if k[0] == "random"}
+    with pytest.raises(ValueError, match="detector and the fitted"):
+        r0.evaluate(units, only_random, rungs=("random",))
+
+
 def test_a_missing_pair_or_class_raises_instead_of_returning_nan() -> None:
     no_pair = make_units(4, 8, pairs=(1, 2, 3, 4, 5))
     with pytest.raises(ValueError, match="family:6"):
@@ -381,6 +441,11 @@ def test_load_world_reads_units_labels_and_oracle(small_world: tuple[Path, dict[
     assert all(len(u.f12) == len(F_IDS) and len(u.f64) == len(F64_NAMES) for u in units)
     assert all(u.oracle is None or np.isfinite(u.oracle) for u in units)
     assert {u.pair for u in units} == set(PAIRS)
+    rows = [json.loads(x) for x in (path / "units.jsonl").read_text().splitlines() if x]
+    renders = [json.loads(x) for x in (path / "renders.jsonl").read_text().splitlines() if x]
+    keys = {r["unit"] for r in rows}
+    assert {u.unit for u in units} == keys and len(keys) == 120  # the unit key, one per unit
+    assert keys <= {r["unit"] for r in renders}  # which is also the render's (and embedding's) id
     with pytest.raises(ValueError, match="scale"):
         r0.load_world(path)  # the default accepts only the standard scale
 

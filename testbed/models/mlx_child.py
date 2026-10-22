@@ -9,6 +9,8 @@ Commands (every one writes a JSON result to `--out`; `embed` also writes an `.np
   chosen layers).
 - `score`: candidate log-probs from one shared prefill with cloned caches, against a plain full
   forward pass of each `prompt + candidate`.
+- `zeroshot`: R1's RISK_LEVEL scores, from one prefill per row and the output head in float32;
+  `--check-full` also scores each candidate with a plain full forward pass.
 - `lora-bench`: LoRA step throughput on a FIXED dummy answer. Nothing is saved; no label is read.
 - `selftest-tiny`: the same id-level core on a tiny random-weight model, for the tests.
 
@@ -24,6 +26,7 @@ A row is `{"id", "before", "render", "after"}`. The prompt is the chat template 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.metadata as md
 import json
 import sys
@@ -43,6 +46,7 @@ LEVELS = tuple(str(n) for n in range(1, 11))
 END_TOKEN = "<|im_end|>"
 SEED = 20261021
 PAD_ID = 0  # padding sits after every answer position; the loss gathers answers only
+CHILD_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()  # this source, at startup
 
 
 class Prompt(NamedTuple):
@@ -148,11 +152,20 @@ def text_model(model: Any) -> Any:
     return getattr(model, "language_model", model)
 
 
-def head(tm: Any, hidden: Any) -> Any:
-    """The output head applied to hidden states (already past the final norm)."""
+def head(tm: Any, hidden: Any, dtype: Any = None) -> Any:
+    """The output head applied to hidden states (already past the final norm).
+
+    With a `dtype` (M4 uses float32), the hidden states are cast to it first and the logits must
+    come back in it: the head then does not round its output to the model's bf16 grid."""
+    if dtype is not None:
+        hidden = hidden.astype(dtype)
     if tm.args.tie_word_embeddings:
-        return tm.model.embed_tokens.as_linear(hidden)
-    return tm.lm_head(hidden)
+        logits = tm.model.embed_tokens.as_linear(hidden)
+    else:
+        logits = tm.lm_head(hidden)
+    if dtype is not None and logits.dtype != dtype:
+        raise RuntimeError(f"head logits are {logits.dtype}, expected {dtype}")
+    return logits
 
 
 def forward_states(mx: Any, model: Any, ids: Sequence[int], wanted: set[int]) -> dict[Any, Any]:
@@ -216,12 +229,18 @@ def _log_softmax(mx: Any, logits: Any) -> Any:
 
 
 def cached_logprobs(
-    mx: Any, model: Any, prompt: Sequence[int], conts: dict[str, list[int]]
+    mx: Any,
+    model: Any,
+    prompt: Sequence[int],
+    conts: dict[str, list[int]],
+    head_dtype: Any = None,
 ) -> dict[str, float]:
-    """log P(whole continuation | prompt) per candidate, from one prefill with cloned caches."""
+    """log P(whole continuation | prompt) per candidate, from one prefill with cloned caches.
+    `head_dtype` is passed to `head` (None: the model's own dtype, as M3 ran it)."""
     tm = text_model(model)
     cache = tm.make_cache()
-    first = _log_softmax(mx, head(tm, tm.model(mx.array(list(prompt))[None], cache=cache)[:, -1]))
+    last = tm.model(mx.array(list(prompt))[None], cache=cache)[:, -1]
+    first = _log_softmax(mx, head(tm, last, head_dtype))
     mx.eval(first)
     out = {}
     for name, cont in conts.items():
@@ -229,19 +248,77 @@ def cached_logprobs(
         if len(cont) > 1:
             branch = clone_cache(cache)
             hidden = tm.model(mx.array(cont[:-1])[None], cache=branch)
-            lp = _log_softmax(mx, head(tm, hidden))
+            lp = _log_softmax(mx, head(tm, hidden, head_dtype))
             total = total + mx.take_along_axis(lp[0], mx.array(cont[1:])[:, None], axis=-1).sum()
         out[name] = float(total.item())
     return out
 
 
-def full_logprob(mx: Any, model: Any, prompt: Sequence[int], cont: Sequence[int]) -> float:
+def full_logprob(
+    mx: Any, model: Any, prompt: Sequence[int], cont: Sequence[int], head_dtype: Any = None
+) -> float:
     """log P(continuation | prompt) from one plain forward pass of `prompt + continuation`."""
     tm = text_model(model)
     ids = mx.array(list(prompt) + list(cont))
     hidden = tm.model(ids[None, :-1])[:, len(prompt) - 1 :, :]
-    lp = _log_softmax(mx, head(tm, hidden))
+    lp = _log_softmax(mx, head(tm, hidden, head_dtype))
     return float(mx.take_along_axis(lp[0], ids[len(prompt) :][:, None], axis=-1).sum().item())
+
+
+def level_summary(logprobs: Sequence[float]) -> dict[str, Any]:
+    """R1's score from the log-probs of the 10 level candidates, in `LEVELS` order.
+
+    `mass` is the sum of their probabilities, `p` the distribution normalized over the 10,
+    `expected` = sum n * p_n (the score) and `argmax` the most likely level (an int, 1-10)."""
+    lp = np.asarray(logprobs, dtype=np.float64)
+    if lp.shape != (len(LEVELS),) or not np.isfinite(lp).all():
+        raise ValueError(f"need {len(LEVELS)} finite log-probs, got {lp.tolist()}")
+    top = lp.max()
+    log_mass = top + np.log(np.exp(lp - top).sum())
+    p = np.exp(lp - log_mass)
+    levels = np.arange(1, len(LEVELS) + 1)
+    return {
+        "mass": float(np.exp(log_mass)),
+        "p": p.tolist(),
+        "expected": float((levels * p).sum()),
+        "argmax": int(levels[int(p.argmax())]),
+    }
+
+
+P_FLOOR = 1e-3  # the agreement check ignores candidates the model gives less normalized mass
+
+
+def zeroshot_row(
+    mx: Any,
+    model: Any,
+    ids: Sequence[int],
+    conts: dict[str, list[int]],
+    *,
+    check_full: bool = False,
+) -> dict[str, Any]:
+    """One row's R1 record: the cached log-probs of the level candidates with a float32 head,
+    and their `level_summary`. With `check_full`, each candidate is also scored by a plain full
+    forward pass (float32 head), giving `logprobs_full`, `expected_full` and `max_abs_diff` over
+    the candidates whose normalized p is at least `P_FLOOR`."""
+    if list(conts) != list(LEVELS):
+        raise ValueError(f"candidates must be the levels {list(LEVELS)}, got {list(conts)}")
+    t0 = time.perf_counter()
+    cached = cached_logprobs(mx, model, ids, conts, mx.float32)
+    lps = [cached[n] for n in LEVELS]
+    out: dict[str, Any] = {
+        "seconds": time.perf_counter() - t0,
+        "logprobs": lps,
+        **level_summary(lps),
+    }
+    if check_full:
+        t0 = time.perf_counter()
+        full = [full_logprob(mx, model, ids, conts[n], mx.float32) for n in LEVELS]
+        out["seconds_full"] = time.perf_counter() - t0
+        keep = np.array(out["p"]) >= P_FLOOR
+        out["logprobs_full"] = full
+        out["expected_full"] = level_summary(full)["expected"]
+        out["max_abs_diff"] = float(np.abs(np.array(lps) - np.array(full))[keep].max())
+    return out
 
 
 def make_row_ce(mx: Any, nn: Any) -> Callable[..., Any]:
@@ -402,18 +479,24 @@ def candidate_sets(tokenizer: Any) -> tuple[dict[str, dict[str, list[int]]], dic
 # --------------------------------------------------------------------------- commands
 
 
-def read_rows(path: Path) -> list[dict[str, Any]]:
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+def read_rows(path: Path) -> tuple[list[dict[str, Any]], str]:
+    """The rows and the sha256 of the file's bytes as read."""
+    raw = path.read_bytes()
+    rows = [json.loads(line) for line in raw.decode().splitlines() if line.strip()]
     for r in rows:
         if set(r) != {"id", "before", "render", "after"}:
             raise SystemExit(f"row keys must be id/before/render/after, got {sorted(r)}")
-    return rows
+    return rows, hashlib.sha256(raw).hexdigest()
 
 
-def meta(mx: Any, command: str, model_dir: str | None, t0: float) -> dict[str, Any]:
+def meta(
+    mx: Any, command: str, model_dir: str | None, t0: float, rows_sha256: str | None = None
+) -> dict[str, Any]:
     return {
         "command": command,
         "model_dir": model_dir,
+        "child_sha256": CHILD_SHA256,
+        "rows_sha256": rows_sha256,
         "peak_memory_gib": gib(mx.get_peak_memory()),
         "mlx": md.version("mlx"),
         "mlx_lm": md.version("mlx-lm"),
@@ -432,7 +515,8 @@ def cmd_count(args: argparse.Namespace) -> None:
 
     tokenizer = load_tokenizer(args.model_dir)
     out = []
-    for row in read_rows(args.inp):
+    rows, rows_sha256 = read_rows(args.inp)
+    for row in rows:
         p = row_prompt(tokenizer, row)
         out.append(
             {
@@ -444,7 +528,8 @@ def cmd_count(args: argparse.Namespace) -> None:
         )
     _, template = candidate_sets(tokenizer)
     write_json(
-        args.out, {**meta(mx, "count", args.model_dir, t0), "rows": out, "template": template}
+        args.out,
+        {**meta(mx, "count", args.model_dir, t0, rows_sha256), "rows": out, "template": template},
     )
 
 
@@ -462,7 +547,7 @@ def cmd_embed(args: argparse.Namespace) -> None:
     tm = text_model(model)
     layers = parse_layers(args.layers, len(tm.layers))
     model.eval()
-    rows = read_rows(args.inp)
+    rows, rows_sha256 = read_rows(args.inp)
     arrays: dict[str, list[np.ndarray]] = {}
     per_row = []
     for row in rows:
@@ -484,7 +569,7 @@ def cmd_embed(args: argparse.Namespace) -> None:
     write_json(
         args.out,
         {
-            **meta(mx, "embed", args.model_dir, t0),
+            **meta(mx, "embed", args.model_dir, t0, rows_sha256),
             "layers": [str(x) for x in layers],
             "hidden_size": int(tm.args.hidden_size),
             "n_layers": len(tm.layers),
@@ -509,7 +594,8 @@ def cmd_score(args: argparse.Namespace) -> None:
     sets, template = candidate_sets(tokenizer)
     flat = {f"{g}:{k}": v for g, group in sets.items() for k, v in group.items()}
     out = []
-    for row in read_rows(args.inp):
+    rows, rows_sha256 = read_rows(args.inp)
+    for row in rows:
         p = row_prompt(tokenizer, row)
         t1 = time.perf_counter()
         cached = cached_logprobs(mx, model, p.ids, flat)
@@ -538,12 +624,46 @@ def cmd_score(args: argparse.Namespace) -> None:
     write_json(
         args.out,
         {
-            **meta(mx, "score", args.model_dir, t0),
+            **meta(mx, "score", args.model_dir, t0, rows_sha256),
             "rows": out,
             "max_abs_diff": {g: max(r[g]["max_abs_diff"] for r in out) for g in sets},
             "template": template,
         },
     )
+
+
+def cmd_zeroshot(args: argparse.Namespace) -> None:
+    t0 = time.perf_counter()
+    mx = init_mlx()
+    model, tokenizer = load_model(args.model_dir)
+    model.eval()
+    sets, template = candidate_sets(tokenizer)
+    out = []
+    rows, rows_sha256 = read_rows(args.inp)
+    for row in rows:
+        p = row_prompt(tokenizer, row)
+        entry = zeroshot_row(mx, model, p.ids, sets["level"], check_full=args.check_full)
+        out.append({"id": row["id"], "n_prompt": len(p.ids), **entry})
+    rest = out[1:]
+    steady_tokens = sum(r["n_prompt"] for r in rest)
+    steady_seconds = sum(r["seconds"] for r in rest)
+    result: dict[str, Any] = {
+        **meta(mx, "zeroshot", args.model_dir, t0, rows_sha256),
+        "head_dtype": "float32",
+        "check_full": args.check_full,
+        "rows": out,
+        "steady_tokens": steady_tokens,
+        "steady_seconds": steady_seconds,
+        "steady_tokens_per_s": steady_tokens / steady_seconds if steady_seconds else None,
+        "template": template["level"],
+    }
+    if args.check_full and out:
+        result["agreement"] = {
+            "p_floor": P_FLOOR,
+            "max_abs_diff": max(r["max_abs_diff"] for r in out),
+            "max_expected_diff": max(abs(r["expected"] - r["expected_full"]) for r in out),
+        }
+    write_json(args.out, result)
 
 
 def cmd_lora_bench(args: argparse.Namespace) -> None:
@@ -556,7 +676,8 @@ def cmd_lora_bench(args: argparse.Namespace) -> None:
     model, tokenizer = load_model(args.model_dir)
     n_trainable = lora_wrap(model)
     target = continuation_ids(tokenizer, DUMMY_TARGET)
-    prompts = [row_prompt(tokenizer, r) for r in read_rows(args.inp)]
+    rows, rows_sha256 = read_rows(args.inp)
+    prompts = [row_prompt(tokenizer, r) for r in rows]
     batches = make_batches(prompts, target, args.batch_size)
     value_and_grad = nn.value_and_grad(model, make_loss(mx, nn))
     optimizer = optim.Adam(learning_rate=LR)
@@ -587,7 +708,7 @@ def cmd_lora_bench(args: argparse.Namespace) -> None:
     write_json(
         args.out,
         {
-            **meta(mx, "lora-bench", args.model_dir, t0),
+            **meta(mx, "lora-bench", args.model_dir, t0, rows_sha256),
             "target": {"text": DUMMY_TARGET, "ids": target, "is_label": False},
             "note": "FIXED dummy answer; no label is read. No adapter is saved.",
             "lora": {**LORA, "lr": LR, "trainable_parameters": n_trainable},
@@ -636,6 +757,32 @@ def _tiny_ids() -> np.ndarray:
     return np.random.RandomState(0).randint(5, 295, size=40)
 
 
+def selftest_float32_head(mx: Any, model: Any, ids: Sequence[int]) -> dict[str, Any]:
+    """The float32 head: logits are float32, and the cached and full paths agree through it."""
+    tm = text_model(model)
+    conts = {"x": [7, 8], "y": [9, 10, 11], "z": [12, 13]}
+    cached = cached_logprobs(mx, model, ids, conts, mx.float32)
+    full = {k: full_logprob(mx, model, ids, v, mx.float32) for k, v in conts.items()}
+    logits = head(tm, tm.model(mx.array(list(ids))[None]), mx.float32)
+    return {
+        "float32_head_logits_dtype": str(logits.dtype),
+        "float32_head_cached_vs_full_max_abs_diff": max(abs(cached[k] - full[k]) for k in conts),
+    }
+
+
+def selftest_zeroshot(mx: Any, model: Any, ids: Sequence[int]) -> dict[str, Any]:
+    """`zeroshot_row` on ten fake three-token level candidates, with the full-pass check."""
+    conts = {n: [20 + int(n), 40 + int(n), 60 + int(n)] for n in LEVELS}
+    row = zeroshot_row(mx, model, ids, conts, check_full=True)
+    return {
+        "zeroshot_p_sum": float(sum(row["p"])),
+        "zeroshot_expected": row["expected"],
+        "zeroshot_expected_vs_full_abs_diff": abs(row["expected"] - row["expected_full"]),
+        "zeroshot_max_abs_diff": row["max_abs_diff"],
+        "zeroshot_n_logprobs": len(row["logprobs"]),
+    }
+
+
 def selftest_forward(mx: Any, tie: bool) -> dict[str, Any]:
     """Layer loop against the model's own forward; mean-pool; cached against full scoring."""
     model = tiny_model(mx, tie)
@@ -657,7 +804,15 @@ def selftest_forward(mx: Any, tie: bool) -> dict[str, Any]:
         seq = ids + v
         lg = log_softmax_np(np.array(model(mx.array(seq)[None])[0]))
         hand_full[k] = float(sum(lg[len(ids) - 1 + i, t] for i, t in enumerate(v)))
+    f32 = {**selftest_float32_head(mx, model, ids), **selftest_zeroshot(mx, model, ids)}
+    bf16 = tiny_model(mx, tie)
+    bf16.set_dtype(mx.bfloat16)
+    bf16.eval()
+    last = text_model(bf16).model(mx.array(ids)[None])[:, -1]
     return {
+        **f32,
+        "bf16_default_head_dtype": str(head(text_model(bf16), last).dtype),
+        "bf16_float32_head_dtype": str(head(text_model(bf16), last, mx.float32).dtype),
         "tie_word_embeddings": tie,
         "final_vs_model_max_abs_diff": float(np.abs(final - own).max()),
         "pool_vs_numpy_max_abs_diff": float(
@@ -759,6 +914,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--layers", required=True)
     p.add_argument("--out-npz", type=Path, required=True)
     add("score", cmd_score)
+    p = add("zeroshot", cmd_zeroshot)
+    p.add_argument("--check-full", action="store_true")
     p = add("lora-bench", cmd_lora_bench)
     p.add_argument("--steps", type=int, required=True)
     p.add_argument("--warmup", type=int, required=True)

@@ -97,6 +97,7 @@ class R0Unit:
     f64: tuple[float, ...]  # F64_NAMES order
     detector: float
     oracle: float | None  # undefined for some timelines (testbed.eval.oracle)
+    unit: str = ""  # the units.jsonl key, which is also the renders.jsonl key and the embedding id
 
 
 def side_of(pair: int) -> str:
@@ -167,6 +168,7 @@ def load_world(
                     _vector(row["f64"], F64_NAMES),
                     float(row["detector_score"]),
                     oracle(pair, load_timeline(conn, row["members"])),
+                    unit,
                 )
             )
     units.sort(key=lambda u: u.group)
@@ -296,33 +298,14 @@ def _difference(a: NDArray[np.float64], b: NDArray[np.float64], point: float) ->
     return {"point": point, "lo": lo, "hi": hi}
 
 
-def evaluate(units: Sequence[R0Unit], scores: Scores) -> dict[str, Any]:
-    """The SPEC §6.4 report for one pooled set of units.
+def primary_comparisons(units: Sequence[R0Unit]) -> dict[str, _Comparison]:
+    """The primary metric's two comparisons, by side ("A", "B"): the side's T units, with one
+    `stratified_weights` draw over (side, class) strata from `BOOT_SEED`.
 
-    Raises, rather than return NaN, if a comparison lacks a class or a pair."""
-    expected = {(rung, regime) for rung in RUNGS for regime in REGIMES}
-    if set(scores) != expected:
-        raise ValueError(f"scores must hold exactly the rung x regime keys; got {sorted(scores)}")
-    n = len(units)
-    for key, values in scores.items():
-        if values.shape != (n,) or not np.all(np.isfinite(values)):
-            raise ValueError(f"scores for {key} must be {n} finite values")
+    Raises if a side lacks a class."""
     pair = np.array([u.pair for u in units], dtype=np.int64)
     positive = np.array([u.positive for u in units], dtype=bool)
-    everyone = np.arange(n)
-
-    family = {p: _comparison(everyone[pair == p], positive, f"family:{p}") for p in PAIRS}
-    channel = {
-        tag: _comparison(
-            everyone[np.isin(pair, [p for p in PAIRS if MEASURED_TAGS[p] == tag])],
-            positive,
-            f"channel:{tag}",
-        )
-        for tag in CHANNELS
-    }
-    pooled = _comparison(everyone, positive, "pooled")
-
-    # Primary: one draw over the T units, resampled within each (side, class) stratum.
+    everyone = np.arange(len(units))
     sides = list(TEST_PAIRS)
     t_units = everyone[np.isin(pair, [p for s in sides for p in t_pairs(s)])]
     in_side = np.array([side_of(int(p)) for p in pair[t_units]])
@@ -343,6 +326,61 @@ def evaluate(units: Sequence[R0Unit], scores: Scores) -> dict[str, Any]:
         primary[side] = _Comparison(
             t_units[pos_cols], t_units[neg_cols], weights[:, pos_cols], weights[:, neg_cols]
         )
+    return primary
+
+
+def primary_boot(
+    score: NDArray[np.float64], comps: Mapping[str, _Comparison]
+) -> tuple[float, NDArray[np.float64]]:
+    """(the mean over sides of the side AUCs, the mean over sides of the `weighted_auc`
+    resamples) of one score vector against `primary_comparisons`."""
+    side_boot = [weighted_auc(score[c.pos], score[c.neg], c.w_pos, c.w_neg) for c in comps.values()]
+    point = float(np.mean([auc(score[c.pos], score[c.neg]) for c in comps.values()]))
+    return point, np.mean(side_boot, axis=0)
+
+
+def evaluate(
+    units: Sequence[R0Unit],
+    scores: Scores,
+    *,
+    rungs: Sequence[str] = RUNGS,
+    extra_differences: Sequence[tuple[str, str]] = (),
+) -> dict[str, Any]:
+    """The SPEC §6.4 report for one pooled set of units.
+
+    `scores` holds exactly `rungs` x `REGIMES`; `rungs` must include `RUNGS`' fitted rungs and the
+    detector, whose differences are always reported. Each `(a, b)` of `extra_differences` adds
+    `differences[regime]["a_minus_b"]`, paired on the same resamples. "oracle" is special-cased,
+    as it only ranks within a pair. Raises, rather than return NaN, if a comparison lacks a class
+    or a pair."""
+    expected = {(rung, regime) for rung in rungs for regime in REGIMES}
+    if set(scores) != expected:
+        raise ValueError(f"scores must hold exactly the rung x regime keys; got {sorted(scores)}")
+    if not {"detector", *FITTED} <= set(rungs):
+        raise ValueError("rungs must include the detector and the fitted R0 rungs")
+    for a, b in extra_differences:
+        if "oracle" in (a, b) or not {a, b} <= set(rungs):
+            raise ValueError(f"extra difference {a} - {b} needs two real rungs of `rungs`")
+    n = len(units)
+    for key, values in scores.items():
+        if values.shape != (n,) or not np.all(np.isfinite(values)):
+            raise ValueError(f"scores for {key} must be {n} finite values")
+    pair = np.array([u.pair for u in units], dtype=np.int64)
+    positive = np.array([u.positive for u in units], dtype=bool)
+    everyone = np.arange(n)
+
+    family = {p: _comparison(everyone[pair == p], positive, f"family:{p}") for p in PAIRS}
+    channel = {
+        tag: _comparison(
+            everyone[np.isin(pair, [p for p in PAIRS if MEASURED_TAGS[p] == tag])],
+            positive,
+            f"channel:{tag}",
+        )
+        for tag in CHANNELS
+    }
+    pooled = _comparison(everyone, positive, "pooled")
+    primary = primary_comparisons(units)
+    sides = list(primary)
 
     report: dict[str, Any] = {
         "n_units": n,
@@ -354,7 +392,7 @@ def evaluate(units: Sequence[R0Unit], scores: Scores) -> dict[str, Any]:
     boots: dict[tuple[str, str], NDArray[np.float64]] = {}  # primary resamples of every real rung
     for regime in REGIMES:
         report["regimes"][regime] = {}
-        for rung in RUNGS:
+        for rung in rungs:
             score = scores[(rung, regime)]
             out: dict[str, Any] = {}
             if rung == "oracle":
@@ -378,16 +416,7 @@ def evaluate(units: Sequence[R0Unit], scores: Scores) -> dict[str, Any]:
                     )
                 out["pooled"] = _mean_entry([by_pair[p] for p in PAIRS], list(PAIRS), family)
             else:
-                side_boot = {
-                    s: weighted_auc(
-                        score[primary[s].pos],
-                        score[primary[s].neg],
-                        primary[s].w_pos,
-                        primary[s].w_neg,
-                    )
-                    for s in sides
-                }
-                boot = np.mean([side_boot[s] for s in sides], axis=0)
+                _, boot = primary_boot(score, primary)
                 boots[(rung, regime)] = boot
                 side_entry = {
                     s: {
@@ -421,10 +450,14 @@ def evaluate(units: Sequence[R0Unit], scores: Scores) -> dict[str, Any]:
 
     report["differences"] = {}
     for regime in REGIMES:
-        point = {r: report["regimes"][regime][r]["primary"]["auc"] for r in FITTED}
+        point = {
+            r: report["regimes"][regime][r]["primary"]["auc"]
+            for r in (*FITTED, *rungs)
+            if r != "oracle"
+        }
         n_counts = {
-            "n_pos": report["regimes"][regime]["detector"]["primary"]["n_pos"],
-            "n_neg": report["regimes"][regime]["detector"]["primary"]["n_neg"],
+            "n_pos": sum(int(c.pos.size) for c in primary.values()),
+            "n_neg": sum(int(c.neg.size) for c in primary.values()),
         }
         stronger = max(("f64_logistic", "f64_trees"), key=lambda r: point[r])
         report["differences"][regime] = {
@@ -441,11 +474,16 @@ def evaluate(units: Sequence[R0Unit], scores: Scores) -> dict[str, Any]:
                 **_difference(
                     boots[(stronger, regime)],
                     boots[("detector", regime)],
-                    point[stronger] - report["regimes"][regime]["detector"]["primary"]["auc"],
+                    point[stronger] - point["detector"],
                 ),
                 **n_counts,
             },
         }
+        for a, b in extra_differences:
+            report["differences"][regime][f"{a}_minus_{b}"] = {
+                **_difference(boots[(a, regime)], boots[(b, regime)], point[a] - point[b]),
+                **n_counts,
+            }
     return report
 
 
@@ -456,7 +494,11 @@ def _s_key(s: float) -> str:
     return str(float(s))
 
 
-def _write_scores(path: Path, by_s: Mapping[float, tuple[Sequence[R0Unit], Scores]]) -> None:
+def _write_scores(
+    path: Path,
+    by_s: Mapping[float, tuple[Sequence[R0Unit], Scores]],
+    rungs: Sequence[str] = RUNGS,
+) -> None:
     with path.open("w") as f:
         for s, (units, scores) in sorted(by_s.items()):
             for i, u in enumerate(units):
@@ -470,7 +512,7 @@ def _write_scores(path: Path, by_s: Mapping[float, tuple[Sequence[R0Unit], Score
                     "side": side_of(u.pair),
                     "scores": {
                         rung: {regime: float(scores[(rung, regime)][i]) for regime in REGIMES}
-                        for rung in RUNGS
+                        for rung in rungs
                     },
                 }
                 f.write(json.dumps(row, sort_keys=True, allow_nan=False) + "\n")

@@ -8,6 +8,7 @@ labels, no database.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -31,6 +32,7 @@ MODELS: dict[str, tuple[str, str]] = {
     "4b": ("models--mlx-community--Qwen3.5-4B-MLX-4bit", "32f3e8ecf654"),
 }
 
+N_LEVELS = 10  # RISK_LEVEL: 1-10
 Row = Mapping[str, str]  # {"id", "before", "render", "after"}
 
 
@@ -54,6 +56,31 @@ def model_dir(key: str, hub: Path | None = None) -> Path:
 def model_revision(key: str) -> str:
     """The full revision of the snapshot in use (the directory name)."""
     return model_dir(key).name
+
+
+def sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def rows_text(rows: Sequence[Row]) -> str:
+    """The rows file the child reads: one JSON object per row. Every rows hash is of this text."""
+    return "".join(json.dumps(dict(r)) + "\n" for r in rows)
+
+
+def child_sha256() -> str:
+    """The sha256 of the child script as it is now."""
+    return hashlib.sha256(CHILD_SCRIPT.read_bytes()).hexdigest()
+
+
+def check_child_identity(
+    command: str, result: Mapping[str, Any], rows: Sequence[Row] | None
+) -> None:
+    """Raise `RuntimeError` unless the result names this `CHILD_SCRIPT` (as it is now) and, when
+    the child was given `rows`, exactly the rows text that was written for it."""
+    if result.get("child_sha256") != child_sha256():
+        raise RuntimeError(f"mlx_child {command}: child_sha256 differs from {CHILD_SCRIPT.name}")
+    if rows is not None and result.get("rows_sha256") != sha256_text(rows_text(rows)):
+        raise RuntimeError(f"mlx_child {command}: the child read other rows than were written")
 
 
 @dataclass(frozen=True)
@@ -101,7 +128,7 @@ def run_child(
         cmd += ["--model-dir", str(model_dir(model_key))]
     if rows is not None:
         rows_file = work_dir / f"{stem}.rows.jsonl"
-        rows_file.write_text("".join(json.dumps(dict(r)) + "\n" for r in rows))
+        rows_file.write_bytes(rows_text(rows).encode())
         cmd += ["--in", str(rows_file)]
     cmd += list(args) + ["--out", str(out_json)]
     if command == "embed":
@@ -119,6 +146,7 @@ def run_child(
             f"mlx_child {command} failed (exit {done.returncode}): {done.stderr[-800:]}"
         )
     result = json.loads(out_json.read_text())
+    check_child_identity(command, result, rows)
     return ChildRun(result, out_npz if command == "embed" else None, work_dir)
 
 
@@ -186,6 +214,46 @@ def score(model_key: str, rows: Sequence[Row], **kw: Any) -> dict[str, Any]:
     result = run_child("score", model_key=model_key, rows=rows, **kw).result
     if [r["id"] for r in result["rows"]] != [r["id"] for r in rows]:
         raise RuntimeError("score: row ids differ from the input")
+    return result
+
+
+def _all_finite(values: Sequence[Any]) -> bool:
+    """True if every value is a finite number (a JSON null or a string is not)."""
+    try:
+        return bool(np.isfinite(np.asarray(values, dtype=np.float64)).all())
+    except TypeError, ValueError:
+        return False
+
+
+def check_zeroshot(result: Mapping[str, Any], rows: Sequence[Row], check_full: bool) -> None:
+    """Raise `RuntimeError` unless a `zeroshot` child result is complete for `rows`: float32 head,
+    the ids in order, 10 finite levels per row (and the agreement fields with `check_full`)."""
+    if result.get("head_dtype") != "float32":
+        raise RuntimeError(f"zeroshot: head dtype {result.get('head_dtype')!r}, expected float32")
+    if bool(result.get("check_full")) != check_full:
+        raise RuntimeError(
+            f"zeroshot: check_full is {result.get('check_full')!r}, wanted {check_full}"
+        )
+    if [r["id"] for r in result["rows"]] != [r["id"] for r in rows]:
+        raise RuntimeError("zeroshot: row ids differ from the input")
+    for r in result["rows"]:
+        values = [*r["logprobs"], r["mass"], *r["p"], r["expected"]]
+        if len(r["logprobs"]) != N_LEVELS or len(r["p"]) != N_LEVELS:
+            raise RuntimeError(f"zeroshot: {r['id']} does not have {N_LEVELS} levels")
+        if not _all_finite(values):
+            raise RuntimeError(f"zeroshot: {r['id']} has non-finite values")
+        if check_full and not _all_finite([r.get("expected_full"), r.get("max_abs_diff")]):
+            raise RuntimeError(f"zeroshot: {r['id']} has a non-finite agreement value")
+
+
+def zeroshot(
+    model_key: str, rows: Sequence[Row], check_full: bool = False, **kw: Any
+) -> dict[str, Any]:
+    """The R1 scorer: per row the 10 level log-probs (float32 head), `mass`, the normalized `p`,
+    `expected` and `argmax`; the child result, checked (`check_zeroshot`)."""
+    args = ["--check-full"] if check_full else []
+    result = run_child("zeroshot", model_key=model_key, rows=rows, args=args, **kw).result
+    check_zeroshot(result, rows, check_full)
     return result
 
 
