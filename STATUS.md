@@ -8,42 +8,39 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
 
 ## State (2026-10-21)
 
-- **M0 done** and committed (`reports/M0.md`).
-- **M1 done; generator v1 frozen** (`reports/M1.md`; hash in DECISIONS.md). Not yet committed.
-  - Every §5.6 row passes on the final generator: standard s = 0 seeds 1–2, s = 0.75 seed 1, s = 1
-    seeds 1–2; generator-only sample (seed 201); channel world (seed 101). Positive control
-    0.915–1.0; max render 1,699 tokens; linkage 1,200/1,200, 0 mixed; parity 0/120.
-  - Channel tags (frozen, `MEASURED_TAGS`): pair 1 M, pair 5 F, pairs 2, 3, 4, 6 T. F64-w90 sees
-    pairs 1, 5 and partly 3 (trees 0.83); pairs 2, 4, 6 stay ≈ 0.5.
-  - Review round 1 (`reviews/round-1/`): five findings fixed, one cross-vendor check of the fixes,
-    two follow-up boundary-scan gaps fixed by the coordinator (`TRIAGE.md`).
-  - Worlds from before the manifest fix sit in `runs/superseded-round1/` (identical world bytes);
-    safe to delete when convenient.
-- **G1 accounting done (owner decision, DECISIONS):** `world_health` tests each world's null-rule
-  rows as one Bonferroni family (T = 163 at s = 0, 157 otherwise); the generator-only sample stays
-  per-row and decisive. The five M1 worlds pass under it; a fair world fails 2/100 (nuisance plus
-  negative control pooled). Implemented by the coordinator (owner's go; the Orca handle was stale).
-- **Next: M2** (R0 across the sweep; gate G1). Orca note: this session's handle is stale
-  (`no_active_sender_terminal`); resume the coordinator inside a live Orca terminal before
-  delegating again.
+- **M0, M1 done** and committed (`f40cdd1`; `reports/M0.md`, `reports/M1.md`). Generator v1 frozen
+  (hash in DECISIONS.md); channel tags frozen as `MEASURED_TAGS` (pair 1 M, pair 5 F, 2/3/4/6 T).
+- **M2 done; G1 passed** (`reports/M2-baselines.md`; `prereg/M2.md` written before any R0 score).
+  Not yet committed.
+  - Ten sweep worlds (`runs/m1-dev-*`, `runs/m2-dev-*`; s ∈ {0, .25, .5, .75, 1} × seeds 1–2) pass
+    health; channel re-check `runs/m2-channel/`; R0 `runs/m2-r0/`; gate `runs/m2-g1/g1.json`.
+  - Held-out primary (T families) at s = 0.75: detector 0.497, F12 0.488, F64 logistic 0.462,
+    F64 trees 0.517; oracle 0.90. No R0 rung sees T at any s; F64 sees pairs 1 and 5.
+  - Same-seed worlds share base draws across s (paired sweep); see the report's caveat.
+  - Orca run `run_c5fdcd8d67af`: worker task `task_baa19b981487` / dispatch `ctx_3163e6755741`
+    (Sonnet 5.5 at high, effective) succeeded and was accepted; its terminal is `retained`
+    (`user_takeover`), with 0 reclaimable.
+- **Next: M3** (feasibility: render lengths, forward-pass and LoRA throughput; pick the probe and R3
+  models; any download needs the owner's go). M4 also needs the R2 tuning world (s = 0.75, own seed).
+- Worlds from before the M1 manifest fix sit in `runs/superseded-round1/`; safe to delete.
 
 ## Open owner decisions
 
 - None.
 - FYI: an untracked `opencode.json` (graft's MCP config) is in the repo root; not ours, left in place.
 
-## Files changed in M1 (uncommitted)
+## Files changed in M2 (uncommitted)
 
-- New: `testbed/world/{DESIGN.md,families.py,generator.py}`, `testbed/pipeline/{timeline,render,
-  tokens,parity,run_world}.py`, `testbed/features/{f12,f64}.py`, `testbed/eval/{labels,metrics,cv,
-  oracle,health}.py`, their tests, `tests/test_ground_truth_boundary.py`, `reviews/round-1/`,
-  `reports/M1.md`.
-- Edited: `testbed/eval/stores.py` (guarded `verify_pair`), `DECISIONS.md`, `STATUS.md`.
+- New: `prereg/M2.md`, `reports/M2-baselines.md`, `reports/M2-auc-vs-s.svg`,
+  `testbed/eval/{r0,figure,g1}.py`, `tests/test_{r0,figure,g1}.py`.
+- Edited: `testbed/eval/cv.py` (`fit_predict`), `testbed/eval/metrics.py` (recall at FPR, weighted
+  bootstrap AUC, intervals), `tests/test_metrics.py`, `STATUS.md`, `DECISIONS.md`.
 
-## Last checks (2026-10-21, after the world-family change)
+## Last checks (2026-10-21, M2 final)
 
-- `make test`: `338 passed in 118.64s (0:01:58)`, exit 0. `make lint`: `All checks passed!`, exit 0.
-  `make typecheck`: `Success: no issues found in 39 source files`, exit 0.
-  `ruff format --check testbed tests`: `39 files already formatted`, exit 0.
-- Regeneration: every `run_world`, `health channel` and `health gensample` exit 0; `health world`
-  re-run on the five worlds under the world family, exit 0 each.
+- `make test`: `383 passed in 131.74s (0:02:11)`, exit 0. `make lint`: `All checks passed!`, exit 0.
+  `make typecheck`: `Success: no issues found in 45 source files`, exit 0.
+  `ruff format --check testbed tests`: `45 files already formatted`, exit 0.
+- Five new `run_world` + `health world` runs exit 0 each; `health channel` exit 0; `r0` on the sweep
+  exit 0 (58.1 s); `g1` exit 0, `G1 passed: health=ok oracle_positive_s1=ok r0_null_s0=ok
+  channel_tags=ok`.

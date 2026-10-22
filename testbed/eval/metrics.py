@@ -194,3 +194,67 @@ def auc_upper_bound(
 ) -> float:
     """One-sided upper bound: the `level` quantile of the bootstrap AUCs (SPEC §5.4)."""
     return float(np.quantile(bootstrap_auc(pos, neg, n_boot=n_boot, seed=seed), level))
+
+
+def recall_at_fpr(pos: ArrayLike, neg: ArrayLike, fpr: float) -> float:
+    """The largest recall of a flag rule "score ≥ t" whose false-positive rate is at most `fpr`.
+
+    `t` runs over every score and +inf (flag nothing), so tied scores are flagged together and
+    never split. The allowed false positives are `floor(fpr · n_neg)`, with a 1e-9 slack so that
+    `0.05 · 160` is 8 and not 7.999….
+    """
+    p, n = _scores(pos, "pos"), _scores(neg, "neg")
+    if not 0 <= fpr <= 1:
+        raise ValueError("fpr must be in [0, 1]")
+    allowed = math.floor(fpr * n.size + 1e-9)
+    thresholds = np.append(np.unique(np.concatenate([p, n])), np.inf)
+    sp, sn = np.sort(p), np.sort(n)
+    flagged_neg = n.size - np.searchsorted(sn, thresholds, "left")  # negatives with score ≥ t
+    flagged_pos = p.size - np.searchsorted(sp, thresholds, "left")
+    return float(flagged_pos[flagged_neg <= allowed].max() / p.size)
+
+
+def stratified_weights(strata: ArrayLike, *, n_boot: int, seed: int) -> NDArray[np.int64]:
+    """(n_boot, n) resample counts: a multinomial draw within each stratum, so every stratum's
+    row sum equals its size. Strata are visited in sorted order, so a seed replays."""
+    labels = np.asarray(strata)
+    if labels.ndim != 1 or labels.size == 0:
+        raise ValueError("strata must be a non-empty 1-D array")
+    if n_boot < 1:
+        raise ValueError("n_boot must be at least 1")
+    rng = np.random.default_rng(seed)
+    out = np.zeros((n_boot, labels.size), dtype=np.int64)
+    for value in np.unique(labels):
+        index = np.flatnonzero(labels == value)
+        out[:, index] = rng.multinomial(index.size, np.full(index.size, 1 / index.size), n_boot)
+    return out
+
+
+def weighted_auc(pos: ArrayLike, neg: ArrayLike, w_pos: ArrayLike, w_neg: ArrayLike) -> Floats:
+    """Mann-Whitney AUC (ties 1/2) of each resample, from integer row weights.
+
+    `w_pos` is (n_boot, n_pos) and `w_neg` is (n_boot, n_neg). The result equals `auc` on the
+    rows repeated by their weights; it is vectorised over the resample axis.
+    """
+    p, n = _scores(pos, "pos"), _scores(neg, "neg")
+    wp, wn = np.asarray(w_pos, dtype=np.float64), np.asarray(w_neg, dtype=np.float64)
+    if wp.ndim != 2 or wn.ndim != 2 or wp.shape[0] != wn.shape[0]:
+        raise ValueError("weights must be (n_boot, n_pos) and (n_boot, n_neg)")
+    if wp.shape[1] != p.size or wn.shape[1] != n.size:
+        raise ValueError("weights do not match the scores")
+    total = wp.sum(axis=1) * wn.sum(axis=1)
+    if np.any(total <= 0):
+        raise ValueError("a resample has no positive or no negative weight")
+    diff = p[:, None] - n[None, :]
+    wins = (diff > 0) + 0.5 * (diff == 0)  # (n_pos, n_neg)
+    return np.asarray(((wp @ wins) * wn).sum(axis=1) / total)
+
+
+def percentile_interval(values: ArrayLike, level: float = 0.95) -> tuple[float, float]:
+    """The two-sided percentile interval of `values` at `level`."""
+    arr = _scores(values, "values")
+    if not 0 < level < 1:
+        raise ValueError("level must be in (0, 1)")
+    tail = (1 - level) / 2
+    lo, hi = np.quantile(arr, [tail, 1 - tail])
+    return float(lo), float(hi)

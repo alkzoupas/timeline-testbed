@@ -398,3 +398,98 @@ def test_oof_scores_deterministic_and_rejects_non_binary() -> None:
     assert np.array_equal(a, b)
     with pytest.raises(ValueError):
         cv.oof_scores(X, y + 1, groups=group, strata=strata, model="logistic_l2", seed=5)
+
+
+# --- recall_at_fpr, resample weights, percentile_interval (R0 report) -----------------------------
+
+
+def test_recall_at_fpr_hand_cases() -> None:
+    pos, neg = [0.9, 0.8, 0.7, 0.2], [0.85, 0.6, 0.4, 0.3, 0.1]
+    # t = 0.7 flags the 0.85 negative only (1 of 5 = 20%) and three positives; t = 0.6 flags two
+    assert metrics.recall_at_fpr(pos, neg, 0.2) == 0.75
+    assert metrics.recall_at_fpr(pos, neg, 0.0) == 0.25  # only t = 0.9 flags no negative
+    assert metrics.recall_at_fpr(pos, neg, 1.0) == 1.0
+    assert metrics.recall_at_fpr([0.1], [0.9, 0.8], 0.0) == 0.0  # only +inf; nothing flagged
+
+
+def test_recall_at_fpr_never_splits_ties() -> None:
+    pos = [0.5, 0.5, 0.9]
+    # two negatives tie at 0.5: flagging the positives at 0.5 flags both of them (50% > 25%)
+    assert metrics.recall_at_fpr(pos, [0.5, 0.5, 0.1, 0.1], 0.25) == pytest.approx(1 / 3)
+    assert metrics.recall_at_fpr(pos, [0.5, 0.5, 0.1, 0.1], 0.5) == 1.0
+    # one negative ties at 0.5 and 25% allows it
+    assert metrics.recall_at_fpr(pos, [0.5, 0.2, 0.1, 0.1], 0.25) == 1.0
+
+
+def test_recall_at_fpr_float_slack() -> None:
+    # 0.29 * 100 is 28.999999999999996 in floating point, but 29 negatives are allowed
+    neg = np.arange(100.0)
+    assert metrics.recall_at_fpr([70.5, 70.5, 10.5, 10.5], neg, 0.29) == 0.5
+
+
+def test_recall_at_fpr_rejects_bad_input() -> None:
+    with pytest.raises(ValueError):
+        metrics.recall_at_fpr([1.0], [0.0], 1.5)
+    with pytest.raises(ValueError):
+        metrics.recall_at_fpr([], [0.0], 0.1)
+
+
+def test_weighted_auc_equals_auc_on_expanded_rows() -> None:
+    rng = np.random.default_rng(3)
+    pos = rng.integers(0, 6, size=9).astype(float)  # few distinct values, so many ties
+    neg = rng.integers(0, 6, size=14).astype(float)
+    w_pos = rng.integers(0, 4, size=(6, 9))
+    w_neg = rng.integers(0, 4, size=(6, 14))
+    w_pos[:, 0] += 1  # at least one positive and one negative in every resample
+    w_neg[:, 0] += 1
+    got = metrics.weighted_auc(pos, neg, w_pos, w_neg)
+    for b in range(6):
+        assert got[b] == pytest.approx(auc(np.repeat(pos, w_pos[b]), np.repeat(neg, w_neg[b])))
+
+
+def test_weighted_auc_of_unit_weights_is_the_auc() -> None:
+    pos, neg = np.array([0.9, 0.5, 0.5]), np.array([0.5, 0.1])
+    ones = lambda n: np.ones((1, n), dtype=int)  # noqa: E731
+    assert metrics.weighted_auc(pos, neg, ones(3), ones(2))[0] == auc(pos, neg)
+
+
+def test_weighted_auc_rejects_mismatched_weights() -> None:
+    with pytest.raises(ValueError):
+        metrics.weighted_auc([1.0, 2.0], [0.0], np.ones((3, 1)), np.ones((3, 1)))
+    with pytest.raises(ValueError):  # an all-zero resample has no AUC
+        metrics.weighted_auc([1.0], [0.0], np.zeros((2, 1)), np.ones((2, 1)))
+
+
+def test_stratified_weights_keep_every_stratum_size() -> None:
+    strata = np.array(["a"] * 5 + ["b"] * 3 + ["c"] * 11)
+    w = metrics.stratified_weights(strata, n_boot=50, seed=7)
+    assert w.shape == (50, 19) and w.dtype.kind == "i" and (w >= 0).all()
+    for value, size in (("a", 5), ("b", 3), ("c", 11)):
+        assert (w[:, strata == value].sum(axis=1) == size).all()
+    assert w[:, strata == "c"].std() > 0  # it really resamples
+
+
+def test_stratified_weights_are_deterministic_for_a_seed() -> None:
+    strata = ["x", "y", "x", "y", "y"]
+    a = metrics.stratified_weights(strata, n_boot=20, seed=1)
+    assert (a == metrics.stratified_weights(strata, n_boot=20, seed=1)).all()
+    assert not (a == metrics.stratified_weights(strata, n_boot=20, seed=2)).all()
+    with pytest.raises(ValueError):
+        metrics.stratified_weights([], n_boot=5, seed=1)
+
+
+def test_percentile_interval_on_a_known_array() -> None:
+    values = np.arange(101.0)  # the 2.5th and 97.5th percentiles are 2.5 and 97.5
+    assert metrics.percentile_interval(values) == pytest.approx((2.5, 97.5))
+    assert metrics.percentile_interval(values, 0.5) == pytest.approx((25.0, 75.0))
+    with pytest.raises(ValueError):
+        metrics.percentile_interval(values, 1.0)
+
+
+def test_fit_predict_returns_p_of_class_one() -> None:
+    x_train = np.array([[0.0], [1.0], [2.0], [10.0], [11.0], [12.0]])
+    y_train = np.array([0, 0, 0, 1, 1, 1])
+    p = cv.fit_predict(x_train, y_train, np.array([[0.5], [11.5]]), model="logistic_l2")
+    assert p[0] < 0.5 < p[1]
+    with pytest.raises(ValueError):
+        cv.fit_predict(x_train, np.zeros(6, dtype=int), x_train, model="logistic_l2")

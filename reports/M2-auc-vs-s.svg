@@ -1,0 +1,155 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="460" viewBox="0 0 760 460" font-family="Helvetica, Arial, sans-serif">
+<rect x="0" y="0" width="760" height="460" fill="#ffffff" stroke="none"/>
+<text x="64" y="26" font-size="16" font-weight="bold" fill="#222222">R0: T-family AUC against s, held-out regime</text>
+<line x1="64" y1="404.00" x2="570" y2="404.00" stroke="#dddddd" stroke-width="1"/>
+<text x="56" y="408.00" font-size="11" text-anchor="end" fill="#222222">0.4</text>
+<line x1="64" y1="344.00" x2="570" y2="344.00" stroke="#dddddd" stroke-width="1"/>
+<text x="56" y="348.00" font-size="11" text-anchor="end" fill="#222222">0.5</text>
+<line x1="64" y1="284.00" x2="570" y2="284.00" stroke="#dddddd" stroke-width="1"/>
+<text x="56" y="288.00" font-size="11" text-anchor="end" fill="#222222">0.6</text>
+<line x1="64" y1="224.00" x2="570" y2="224.00" stroke="#dddddd" stroke-width="1"/>
+<text x="56" y="228.00" font-size="11" text-anchor="end" fill="#222222">0.7</text>
+<line x1="64" y1="164.00" x2="570" y2="164.00" stroke="#dddddd" stroke-width="1"/>
+<text x="56" y="168.00" font-size="11" text-anchor="end" fill="#222222">0.8</text>
+<line x1="64" y1="104.00" x2="570" y2="104.00" stroke="#dddddd" stroke-width="1"/>
+<text x="56" y="108.00" font-size="11" text-anchor="end" fill="#222222">0.9</text>
+<line x1="64" y1="44.00" x2="570" y2="44.00" stroke="#dddddd" stroke-width="1"/>
+<text x="56" y="48.00" font-size="11" text-anchor="end" fill="#222222">1</text>
+<line x1="64.00" y1="404" x2="64.00" y2="409" stroke="#888888" stroke-width="1"/>
+<text x="64.00" y="423" font-size="11" text-anchor="middle" fill="#222222">0</text>
+<line x1="190.50" y1="404" x2="190.50" y2="409" stroke="#888888" stroke-width="1"/>
+<text x="190.50" y="423" font-size="11" text-anchor="middle" fill="#222222">0.25</text>
+<line x1="317.00" y1="404" x2="317.00" y2="409" stroke="#888888" stroke-width="1"/>
+<text x="317.00" y="423" font-size="11" text-anchor="middle" fill="#222222">0.5</text>
+<line x1="443.50" y1="404" x2="443.50" y2="409" stroke="#888888" stroke-width="1"/>
+<text x="443.50" y="423" font-size="11" text-anchor="middle" fill="#222222">0.75</text>
+<line x1="570.00" y1="404" x2="570.00" y2="409" stroke="#888888" stroke-width="1"/>
+<text x="570.00" y="423" font-size="11" text-anchor="middle" fill="#222222">1</text>
+<rect x="64" y="44" width="506" height="360" fill="none" stroke="#888888" stroke-width="1"/>
+<line x1="64" y1="344.00" x2="570" y2="344.00" stroke="#222222" stroke-width="1" stroke-dasharray="5,4"/>
+<text x="317.0" y="448" font-size="12" text-anchor="middle" fill="#222222">signal strength s</text>
+<text x="16" y="224.0" font-size="12" text-anchor="middle" fill="#222222" transform="rotate(-90 16 224.0)">AUC (mean of sides A and B)</text>
+<polyline data-series="random" points="64.00,346.03 190.50,346.03 317.00,346.03 443.50,346.03 570.00,346.03" fill="none" stroke="#0072B2" stroke-width="2"/>
+<line x1="64.00" y1="324.72" x2="64.00" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="60.00" y1="324.72" x2="68.00" y2="324.72" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="60.00" y1="368.82" x2="68.00" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<circle cx="64.00" cy="346.03" r="3.5" fill="#0072B2" stroke="#ffffff" stroke-width="1"/>
+<line x1="190.50" y1="324.72" x2="190.50" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="186.50" y1="324.72" x2="194.50" y2="324.72" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="186.50" y1="368.82" x2="194.50" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<circle cx="190.50" cy="346.03" r="3.5" fill="#0072B2" stroke="#ffffff" stroke-width="1"/>
+<line x1="317.00" y1="324.72" x2="317.00" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="313.00" y1="324.72" x2="321.00" y2="324.72" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="313.00" y1="368.82" x2="321.00" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<circle cx="317.00" cy="346.03" r="3.5" fill="#0072B2" stroke="#ffffff" stroke-width="1"/>
+<line x1="443.50" y1="324.72" x2="443.50" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="439.50" y1="324.72" x2="447.50" y2="324.72" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="439.50" y1="368.82" x2="447.50" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<circle cx="443.50" cy="346.03" r="3.5" fill="#0072B2" stroke="#ffffff" stroke-width="1"/>
+<line x1="570.00" y1="324.72" x2="570.00" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="566.00" y1="324.72" x2="574.00" y2="324.72" stroke="#0072B2" stroke-width="1.25"/>
+<line x1="566.00" y1="368.82" x2="574.00" y2="368.82" stroke="#0072B2" stroke-width="1.25"/>
+<circle cx="570.00" cy="346.03" r="3.5" fill="#0072B2" stroke="#ffffff" stroke-width="1"/>
+<line x1="584" y1="58" x2="608" y2="58" stroke="#0072B2" stroke-width="2"/>
+<text x="614" y="62" font-size="12" fill="#222222">random</text>
+<polyline data-series="detector" points="64.00,345.81 190.50,345.81 317.00,345.81 443.50,345.81 570.00,345.81" fill="none" stroke="#D55E00" stroke-width="2"/>
+<line x1="64.00" y1="325.48" x2="64.00" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="60.00" y1="325.48" x2="68.00" y2="325.48" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="60.00" y1="366.53" x2="68.00" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<circle cx="64.00" cy="345.81" r="3.5" fill="#D55E00" stroke="#ffffff" stroke-width="1"/>
+<line x1="190.50" y1="325.48" x2="190.50" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="186.50" y1="325.48" x2="194.50" y2="325.48" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="186.50" y1="366.53" x2="194.50" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<circle cx="190.50" cy="345.81" r="3.5" fill="#D55E00" stroke="#ffffff" stroke-width="1"/>
+<line x1="317.00" y1="325.48" x2="317.00" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="313.00" y1="325.48" x2="321.00" y2="325.48" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="313.00" y1="366.53" x2="321.00" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<circle cx="317.00" cy="345.81" r="3.5" fill="#D55E00" stroke="#ffffff" stroke-width="1"/>
+<line x1="443.50" y1="325.48" x2="443.50" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="439.50" y1="325.48" x2="447.50" y2="325.48" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="439.50" y1="366.53" x2="447.50" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<circle cx="443.50" cy="345.81" r="3.5" fill="#D55E00" stroke="#ffffff" stroke-width="1"/>
+<line x1="570.00" y1="325.48" x2="570.00" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="566.00" y1="325.48" x2="574.00" y2="325.48" stroke="#D55E00" stroke-width="1.25"/>
+<line x1="566.00" y1="366.53" x2="574.00" y2="366.53" stroke="#D55E00" stroke-width="1.25"/>
+<circle cx="570.00" cy="345.81" r="3.5" fill="#D55E00" stroke="#ffffff" stroke-width="1"/>
+<line x1="584" y1="78" x2="608" y2="78" stroke="#D55E00" stroke-width="2"/>
+<text x="614" y="82" font-size="12" fill="#222222">detector</text>
+<polyline data-series="f12_logistic" points="64.00,348.94 190.50,351.64 317.00,349.04 443.50,350.99 570.00,349.97" fill="none" stroke="#009E73" stroke-width="2"/>
+<line x1="64.00" y1="327.77" x2="64.00" y2="369.24" stroke="#009E73" stroke-width="1.25"/>
+<line x1="60.00" y1="327.77" x2="68.00" y2="327.77" stroke="#009E73" stroke-width="1.25"/>
+<line x1="60.00" y1="369.24" x2="68.00" y2="369.24" stroke="#009E73" stroke-width="1.25"/>
+<circle cx="64.00" cy="348.94" r="3.5" fill="#009E73" stroke="#ffffff" stroke-width="1"/>
+<line x1="190.50" y1="330.63" x2="190.50" y2="372.39" stroke="#009E73" stroke-width="1.25"/>
+<line x1="186.50" y1="330.63" x2="194.50" y2="330.63" stroke="#009E73" stroke-width="1.25"/>
+<line x1="186.50" y1="372.39" x2="194.50" y2="372.39" stroke="#009E73" stroke-width="1.25"/>
+<circle cx="190.50" cy="351.64" r="3.5" fill="#009E73" stroke="#ffffff" stroke-width="1"/>
+<line x1="317.00" y1="327.14" x2="317.00" y2="369.91" stroke="#009E73" stroke-width="1.25"/>
+<line x1="313.00" y1="327.14" x2="321.00" y2="327.14" stroke="#009E73" stroke-width="1.25"/>
+<line x1="313.00" y1="369.91" x2="321.00" y2="369.91" stroke="#009E73" stroke-width="1.25"/>
+<circle cx="317.00" cy="349.04" r="3.5" fill="#009E73" stroke="#ffffff" stroke-width="1"/>
+<line x1="443.50" y1="329.93" x2="443.50" y2="372.44" stroke="#009E73" stroke-width="1.25"/>
+<line x1="439.50" y1="329.93" x2="447.50" y2="329.93" stroke="#009E73" stroke-width="1.25"/>
+<line x1="439.50" y1="372.44" x2="447.50" y2="372.44" stroke="#009E73" stroke-width="1.25"/>
+<circle cx="443.50" cy="350.99" r="3.5" fill="#009E73" stroke="#ffffff" stroke-width="1"/>
+<line x1="570.00" y1="329.30" x2="570.00" y2="371.32" stroke="#009E73" stroke-width="1.25"/>
+<line x1="566.00" y1="329.30" x2="574.00" y2="329.30" stroke="#009E73" stroke-width="1.25"/>
+<line x1="566.00" y1="371.32" x2="574.00" y2="371.32" stroke="#009E73" stroke-width="1.25"/>
+<circle cx="570.00" cy="349.97" r="3.5" fill="#009E73" stroke="#ffffff" stroke-width="1"/>
+<line x1="584" y1="98" x2="608" y2="98" stroke="#009E73" stroke-width="2"/>
+<text x="614" y="102" font-size="12" fill="#222222">f12_logistic</text>
+<polyline data-series="f64_logistic" points="64.00,363.43 190.50,363.92 317.00,365.08 443.50,367.07 570.00,371.05" fill="none" stroke="#CC79A7" stroke-width="2"/>
+<line x1="64.00" y1="343.23" x2="64.00" y2="384.26" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="60.00" y1="343.23" x2="68.00" y2="343.23" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="60.00" y1="384.26" x2="68.00" y2="384.26" stroke="#CC79A7" stroke-width="1.25"/>
+<circle cx="64.00" cy="363.43" r="3.5" fill="#CC79A7" stroke="#ffffff" stroke-width="1"/>
+<line x1="190.50" y1="343.48" x2="190.50" y2="384.62" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="186.50" y1="343.48" x2="194.50" y2="343.48" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="186.50" y1="384.62" x2="194.50" y2="384.62" stroke="#CC79A7" stroke-width="1.25"/>
+<circle cx="190.50" cy="363.92" r="3.5" fill="#CC79A7" stroke="#ffffff" stroke-width="1"/>
+<line x1="317.00" y1="344.44" x2="317.00" y2="385.41" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="313.00" y1="344.44" x2="321.00" y2="344.44" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="313.00" y1="385.41" x2="321.00" y2="385.41" stroke="#CC79A7" stroke-width="1.25"/>
+<circle cx="317.00" cy="365.08" r="3.5" fill="#CC79A7" stroke="#ffffff" stroke-width="1"/>
+<line x1="443.50" y1="346.08" x2="443.50" y2="387.66" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="439.50" y1="346.08" x2="447.50" y2="346.08" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="439.50" y1="387.66" x2="447.50" y2="387.66" stroke="#CC79A7" stroke-width="1.25"/>
+<circle cx="443.50" cy="367.07" r="3.5" fill="#CC79A7" stroke="#ffffff" stroke-width="1"/>
+<line x1="570.00" y1="350.07" x2="570.00" y2="391.77" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="566.00" y1="350.07" x2="574.00" y2="350.07" stroke="#CC79A7" stroke-width="1.25"/>
+<line x1="566.00" y1="391.77" x2="574.00" y2="391.77" stroke="#CC79A7" stroke-width="1.25"/>
+<circle cx="570.00" cy="371.05" r="3.5" fill="#CC79A7" stroke="#ffffff" stroke-width="1"/>
+<line x1="584" y1="118" x2="608" y2="118" stroke="#CC79A7" stroke-width="2"/>
+<text x="614" y="122" font-size="12" fill="#222222">f64_logistic</text>
+<polyline data-series="f64_trees" points="64.00,329.38 190.50,328.04 317.00,323.48 443.50,334.06 570.00,337.17" fill="none" stroke="#E69F00" stroke-width="2"/>
+<line x1="64.00" y1="307.67" x2="64.00" y2="350.12" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="60.00" y1="307.67" x2="68.00" y2="307.67" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="60.00" y1="350.12" x2="68.00" y2="350.12" stroke="#E69F00" stroke-width="1.25"/>
+<circle cx="64.00" cy="329.38" r="3.5" fill="#E69F00" stroke="#ffffff" stroke-width="1"/>
+<line x1="190.50" y1="305.81" x2="190.50" y2="350.66" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="186.50" y1="305.81" x2="194.50" y2="305.81" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="186.50" y1="350.66" x2="194.50" y2="350.66" stroke="#E69F00" stroke-width="1.25"/>
+<circle cx="190.50" cy="328.04" r="3.5" fill="#E69F00" stroke="#ffffff" stroke-width="1"/>
+<line x1="317.00" y1="302.15" x2="317.00" y2="345.75" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="313.00" y1="302.15" x2="321.00" y2="302.15" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="313.00" y1="345.75" x2="321.00" y2="345.75" stroke="#E69F00" stroke-width="1.25"/>
+<circle cx="317.00" cy="323.48" r="3.5" fill="#E69F00" stroke="#ffffff" stroke-width="1"/>
+<line x1="443.50" y1="312.56" x2="443.50" y2="356.68" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="439.50" y1="312.56" x2="447.50" y2="312.56" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="439.50" y1="356.68" x2="447.50" y2="356.68" stroke="#E69F00" stroke-width="1.25"/>
+<circle cx="443.50" cy="334.06" r="3.5" fill="#E69F00" stroke="#ffffff" stroke-width="1"/>
+<line x1="570.00" y1="315.95" x2="570.00" y2="359.27" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="566.00" y1="315.95" x2="574.00" y2="315.95" stroke="#E69F00" stroke-width="1.25"/>
+<line x1="566.00" y1="359.27" x2="574.00" y2="359.27" stroke="#E69F00" stroke-width="1.25"/>
+<circle cx="570.00" cy="337.17" r="3.5" fill="#E69F00" stroke="#ffffff" stroke-width="1"/>
+<line x1="584" y1="138" x2="608" y2="138" stroke="#E69F00" stroke-width="2"/>
+<text x="614" y="142" font-size="12" fill="#222222">f64_trees</text>
+<polyline data-series="oracle (mean of families)" points="64.00,349.70 190.50,242.10 317.00,164.10 443.50,104.29 570.00,60.99" fill="none" stroke="#56B4E9" stroke-width="2"/>
+<circle cx="64.00" cy="349.70" r="3.5" fill="#56B4E9" stroke="#ffffff" stroke-width="1"/>
+<circle cx="190.50" cy="242.10" r="3.5" fill="#56B4E9" stroke="#ffffff" stroke-width="1"/>
+<circle cx="317.00" cy="164.10" r="3.5" fill="#56B4E9" stroke="#ffffff" stroke-width="1"/>
+<circle cx="443.50" cy="104.29" r="3.5" fill="#56B4E9" stroke="#ffffff" stroke-width="1"/>
+<circle cx="570.00" cy="60.99" r="3.5" fill="#56B4E9" stroke="#ffffff" stroke-width="1"/>
+<line x1="584" y1="158" x2="608" y2="158" stroke="#56B4E9" stroke-width="2"/>
+<text x="614" y="162" font-size="12" fill="#222222">oracle (mean of families)</text>
+</svg>

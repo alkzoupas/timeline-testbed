@@ -62,3 +62,15 @@ def oof_scores(
     if np.isnan(out).any():
         raise RuntimeError("some rows were never in a test fold")
     return out
+
+
+def fit_predict(
+    x_train: ArrayLike, y_train: ArrayLike, x_test: ArrayLike, *, model: str
+) -> NDArray[np.float64]:
+    """P(class 1) on `x_test` from a fresh `model` fitted on the training rows."""
+    labels = np.asarray(y_train)
+    if set(np.unique(labels)) != {0, 1}:
+        raise ValueError("y_train must hold both classes, coded 0/1")
+    fitted = clone(models()[model]).fit(np.asarray(x_train, dtype=np.float64), labels)
+    proba = fitted.predict_proba(np.asarray(x_test, dtype=np.float64))
+    return np.asarray(proba[:, list(fitted.classes_).index(1)], dtype=np.float64)
