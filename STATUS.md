@@ -36,19 +36,20 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
 - **M8, a Claude Haiku 5.5 pilot** (owner, 2026-10-22), via the owner's subscription; zero-shot plus
   held-out few-shot, pilot first. The plan is in `context/m8-haiku-kickoff.md`; results go to
   `reports/M8.md`.
-  - Steps 1–3 done (smoke, 50 calls, `runs/m8-smoke/`; retest Pearson 0.22, so *k* = 3 draws).
-    Owner's go covers steps 1–5, through the 1,920-call pilot (`context/m8-haiku-kickoff.md`).
-  - Step 1 done: prompt `m8-v1` frozen in `testbed/models/haiku_prompt.py` (sha256 `028db033…`,
-    system `0f6af5ef…` = the smoke's), with the route constants; committed by the owner (`0b84bd1`).
-  - Step 2: Orca run `run_392d9c02ec97`. Worker `ctx_c8516f5bd037` (claude-sonnet-5-5, high) wrote
-    `testbed/eval/haiku.py`, `testbed/models/haiku_run.py` and their tests. My review asked for
-    fixes F1–F5 (one pinned CLI binary, `api_error_status`, an unparsed-streak stop, route check in
-    the scorer, token sums); fix worker `ctx_b6e0640cc6dc` (launch.effective claude-sonnet-5-5,
-    high) did them. I reviewed them, rewrapped one `haiku.py` docstring paragraph and ran the
-    checks below: **accepted**, ready to commit. Both worker terminals are yours (`user_takeover`).
-  - Then, after you commit step 2: step 3, the 24-call end-to-end check; step 4, `prereg/M8.md`
-    (draft ready; go-bar at the 1.25th percentile, Bonferroni over the two variants as G2);
-    step 5, the pilot.
+  - Smoke done (50 calls, `runs/m8-smoke/`; retest Pearson 0.22, so *k* = 3 draws). Owner's go
+    covers kickoff steps 1–5, through the 1,920-call pilot (`context/m8-haiku-kickoff.md`).
+  - Step 1: prompt `m8-v1` frozen in `testbed/models/haiku_prompt.py` (sha256 `028db033…`, system
+    `0f6af5ef…` = the smoke's), with the route constants (`0b84bd1`).
+  - Step 2: driver, scorer and tests (`070a94d`), by Orca workers `ctx_c8516f5bd037` and, for my
+    review's fixes F1–F5, `ctx_b6e0640cc6dc` (run `run_392d9c02ec97`; launch.effective
+    claude-sonnet-5-5, high). Accepted on my own checks. Both terminals are yours (`user_takeover`).
+  - Step 3: the 24-call end-to-end check passed (`runs/m8-check/`): 24 of 24 parsed first try, CLI
+    2.1.308 throughout; `score` dry run exit 0. Few-shot answered 93–96 on 11 of 12 draws (a risk,
+    stated in the prereg; the prompt stays frozen).
+  - Step 4: `prereg/M8.md` written (pilot job `runs/m8-pilot/jobs.jsonl` `3bfda62f…`; GO if either
+    variant's lower bound at the 1.25th percentile is above 0.5), with its DECISIONS line.
+  - **Next: you commit `prereg/M8.md`; then step 5**, the pilot (1,920 calls, about 1 h at five at
+    once; p50 8.4 s per call), then `score` once, `reports/M8.md` and a DECISIONS verdict line.
 - The `runs/confirm-*` worlds stay unopened.
 
 ## Open owner decisions
@@ -60,10 +61,9 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
 - Optional: delete `runs/superseded-round1/` and `runs/m4-*-superseded/` (gitignored data; your go
   needed).
 
-## Files changed since `0b84bd1` (uncommitted)
+## Files changed since `070a94d` (uncommitted)
 
-- `STATUS.md`. Step 2, accepted: `testbed/eval/haiku.py`, `testbed/models/haiku_run.py`,
-  `tests/test_haiku_eval.py`, `tests/test_haiku_run.py`.
+- `STATUS.md`, `DECISIONS.md` (one line: the M8 prereg), `prereg/M8.md` (new).
 
 ## Last checks (2026-10-22)
 
@@ -71,9 +71,8 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
   `184 passed in 14.62s`, lint `All checks passed!`, typecheck `Success: no issues found in 71
   source files`, `ruff format --check` `71 files already formatted`; exit 0 each.
 - M8 smoke: `smoke.py run` exit 0 (iso 2 + iso2 1 + 47 calls, every rc 0); `summarize.py` exit 0.
-- Figure: `python -m testbed.eval.result --r0 runs/m2-r0/r0.json --r2 runs/m4-g2/report.json
-  runs/m4-r2-s0.5/r2.json --out reports/RESULT-auc-vs-s.svg`, exit 0. Baselines matched R0 at every
-  R2 s, and the printed points match RESULT.md's table.
+- Step 3: `select --mode check` exit 0 (`0844f116…`); driver exit 0, `done ok 24, done unparsed 0,
+  remaining 0, errors this run 0`; `score` exit 0 (`03cfbfa0…`). `select --mode pilot` exit 0.
 - R2 s = 0.5: `r2 score`, exit 0 in 11.2 s; `r2.json` sha256 `00ac6cb8…`. Embeddings are bound to
   child `ae565057…` and prompt `0cfe33a7…`.
 - G2, 08:26: `python -m testbed.eval.g2 … --out runs/m4-g2`, exit 0 in 23 s: `G2 FAIL:
