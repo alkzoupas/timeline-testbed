@@ -1,0 +1,654 @@
+--- a/testbed/eval/health.py
++++ b/testbed/eval/health.py
+@@ -54,7 +54,7 @@
+ from testbed.features.f64 import FEATURES as F64_NAMES
+ from testbed.pipeline.render import parse
+ from testbed.pipeline.timeline import WINDOW_START, UnitTimeline, load_timeline
+-from testbed.world.families import CHANNEL_TAGS, PAIRS, T_PAIRS
++from testbed.world.families import CHANNEL_TAGS, MEASURED_TAGS, PAIRS, T_PAIRS
+ from testbed.world.generator import (
+     EDGE_SIGNALS,
+     GENERATOR_VERSION,
+@@ -864,6 +864,8 @@
+         "designed": CHANNEL_TAGS[pair],
+         "measured": measured,
+         "matches": measured == CHANNEL_TAGS[pair],
++        "frozen": MEASURED_TAGS[pair],
++        "matches_frozen": measured == MEASURED_TAGS[pair],
+         "f12_models": models,
+         "detector": detector_score,
+         "best_f12_auc": best,
+@@ -885,7 +887,8 @@
+ 
+     The T-designed pairs (2, 3, 4, 6) use the channel world; the others use the standard s = 1
+     worlds pooled. Passes if every T-designed pair measures T (SPEC §5.4); F and M are measured
+-    and frozen as measured. Writes `out`."""
++    and frozen as measured. Each record also compares the measurement with the frozen tag
++    (`MEASURED_TAGS`). Writes `out`."""
+     worlds = [(channel, channel_scales, 0)] + [
+         (path, standard_scales, i + 1) for i, path in enumerate(standard)
+     ]
+--- a/testbed/eval/labels.py
++++ b/testbed/eval/labels.py
+@@ -2,7 +2,9 @@
+ 
+ It verifies the store pair before any label read, and it refuses a confirmation world
+ (`runs/confirm-*`, SPEC §8) unless `prereg/M6.md` exists and every hash in its `seal` block matches
+-the file on disk. Labels leave this package only as arguments to label-free code.
++the file on disk. Every ground-truth opener calls `guard_stores` first: `open_labels` here and
++`stores.verify_pair` (a boundary test enforces it). Labels leave this package only as arguments to
++label-free code.
+ 
+ The seal block in `prereg/M6.md` is a fenced code block tagged `seal`, one `<sha256>  <path>` line
+ per frozen artifact, paths relative to the repo root (the `shasum -a 256` output format).
+@@ -74,14 +76,20 @@
+             raise SealError(f"sealed artifact changed since the M6 freeze: {rel}")
+ 
+ 
+-def open_labels(stores: Stores, *, repo_root: Path = REPO_ROOT) -> WorldLabels:
+-    """Verify the pair, check the seal for a confirmation world, then read every group's label
+-    and family and the account-to-group map."""
++def guard_stores(stores: Stores, *, repo_root: Path = REPO_ROOT) -> None:
++    """Run before opening a ground-truth store: check the seal for a confirmation world, and
++    refuse a missing store."""
+     if is_confirmation_store(stores.ground_truth_db) or is_confirmation_store(stores.inference_db):
+         check_seal(repo_root / "prereg" / "M6.md", repo_root)
+     for path in (stores.inference_db, stores.ground_truth_db):
+         if not path.is_file():  # never let the vendored engine create an empty store
+             raise FileNotFoundError(path)
++
++
++def open_labels(stores: Stores, *, repo_root: Path = REPO_ROOT) -> WorldLabels:
++    """Guard the stores, verify the pair, then read every group's label and family and the
++    account-to-group map."""
++    guard_stores(stores, repo_root=repo_root)
+     inf_engine = make_inference_engine(stores.inference_url)
+     gt_engine = make_ground_truth_engine(stores.ground_truth_url)
+     try:
+--- a/testbed/eval/metrics.py
++++ b/testbed/eval/metrics.py
+@@ -118,16 +118,16 @@
+ def null_rule(
+     pos: ArrayLike, neg: ArrayLike, *, tests: int, alpha: float = 0.05, seed: int = NULL_SEED
+ ) -> NullRule:
+-    """SPEC §5.6: the Bonferroni-adjusted 95% interval for the AUC contains 0.5.
++    """SPEC §5.6 null rule: a two-sided permutation test of exchangeability of the two samples.
+ 
+-    0.5 lies inside the test-inverted interval iff the two-sided level-`alpha_adj` test of
+-    AUC = 0.5 doesn't reject, with `alpha_adj = alpha / tests` (`tests` is every test in that row
+-    on that world or sample). The test is exact under the fair-generator null, where family and
+-    twin groups are exchangeable. A z-screen with the exact permutation variance passes the
+-    clear cases; the rest get a Monte Carlo permutation test (`permutation_p`), so the pass/fail
+-    rule doesn't lean on a normal tail. Calibration: the DeLong normal interval failed a fair
+-    generator in 17% of seeds (nuisance, 148 tests) and 11% (negative control, 6 tests); this
+-    rule's z-test failed 6% and a permutation test 4% (100 fair seeds, 40 + 160 per pair).
++    H0: family and twin scores come from the same distribution (SPEC §5.1(3)). The statistic is
++    |AUC − 0.5|, tested at `alpha_adj = alpha / tests` (`tests` is every test in that row on that
++    world or sample). A rejection means the distributions differ; it is not an AUC confidence
++    interval. When the distributions differ but the population AUC is 0.5, the rule can still
++    reject. That is stricter than SPEC §5.6's CI wording, and it is what §5.1(3) asks for. The
++    test is exact under the fair-generator null, where family and twin groups are exchangeable.
++    A z-screen with the exact permutation variance passes the clear cases; the rest get a Monte
++    Carlo permutation test (`permutation_p`), so the pass/fail rule doesn't lean on a normal tail.
+     If every score is tied the rule passes with p = 1.
+     """
+     if tests < 1:
+--- a/testbed/eval/stores.py
++++ b/testbed/eval/stores.py
+@@ -2,16 +2,21 @@
+ 
+ from __future__ import annotations
+ 
++from pathlib import Path
++
+ from app.db.engine import make_inference_engine
+ from app.db.ground_truth_store import make_ground_truth_engine
+ from app.db.world_provenance import VerifiedWorld, verify_world_pair
+ from sqlalchemy.orm import Session
+ 
++from testbed.eval.labels import REPO_ROOT, guard_stores
+ from testbed.world.persist import Stores
+ 
+ 
+-def verify_pair(stores: Stores) -> VerifiedWorld:
+-    """Prove the two stores are one world's matched pair (the vendored receipt check)."""
++def verify_pair(stores: Stores, *, repo_root: Path = REPO_ROOT) -> VerifiedWorld:
++    """Prove the two stores are one world's matched pair (the vendored receipt check). Guarded
++    like `open_labels`: a confirmation world needs the M6 seal."""
++    guard_stores(stores, repo_root=repo_root)
+     inf_engine = make_inference_engine(stores.inference_url)
+     gt_engine = make_ground_truth_engine(stores.ground_truth_url)
+     try:
+--- a/testbed/world/DESIGN.md
++++ b/testbed/world/DESIGN.md
+@@ -119,7 +119,9 @@
+ **Measured channel tags (SPEC §5.4, M1, frozen as `MEASURED_TAGS`).** Pairs 2, 3, 4 and 6 measured
+ T: every one-sided upper bound ≤ 0.57. Pair 1, designed F, measured M (best F12 AUC 0.69): its
+ twin also takes turns, so F-CYC-2 and F-CYC-3 fire in both. Pair 5, designed M, measured F (0.91,
+-through F-CYC-3). The headings below keep the design tags.
++through F-CYC-3). The headings below keep the design tags. A world manifest records the measured
++tags as `channel_tags` and the design tags as `designed_channel_tags`; the channel check reports
++`frozen` and `matches_frozen` per pair (review round 1, finding 5).
+ 
+ ### Pair 1: `rotator` vs `household_device` (F)
+ 
+@@ -157,6 +159,10 @@
+ - **Sentence:** *s* is the probability, per (account, session), that the session's (amount 1,
+   amount 2, gap) is replaced by the group's template. The template is one draw from the twin's
+   per-session distribution, using `mech`. Session time, start minute and count are the twin's.
++- **Volume.** The template keeps the mean of total volume but not its spread: an account with *N*
++  replayed sessions consumes `N·(a+b)` (variance 2.5·N², against the twin's 2.5·N). That spread
++  is part of the mechanism, as pair 4's coupling is (owner decision, 2026-10-21; review round 1,
++  finding 1). F12 can't see it (amounts stay under the rate limits and the grant); F64 partly can.
+ - **Oracle:** the fraction of cross-account session pairs whose (amount 1, amount 2, gap) are
+   identical.
+ 
+--- a/testbed/world/generator.py
++++ b/testbed/world/generator.py
+@@ -62,6 +62,7 @@
+     CHANNEL_TAGS,
+     GRANT,
+     GROUP_SIZE,
++    MEASURED_TAGS,
+     PAIRS,
+     T_PAIRS,
+     TWINS,
+@@ -381,7 +382,8 @@
+         "s": spec.s,
+         "scale": spec.scale,
+         "families": sorted({x.scenario_family for x in world.labels}),
+-        "channel_tags": {str(p): CHANNEL_TAGS[p] for p in SCALES[spec.scale][0]},
++        "channel_tags": {str(p): MEASURED_TAGS[p] for p in SCALES[spec.scale][0]},
++        "designed_channel_tags": {str(p): CHANNEL_TAGS[p] for p in SCALES[spec.scale][0]},
+         "counts": {
+             "groups": len(world.labels),
+             "abusive_groups": abusive,
+--- a/tests/test_generator.py
++++ b/tests/test_generator.py
+@@ -24,6 +24,7 @@
+     CHANNEL_TAGS,
+     FAMILIES,
+     GRANT,
++    MEASURED_TAGS,
+     PAIRS,
+     T_PAIRS,
+     TWINS,
+@@ -153,7 +154,9 @@
+     assert manifest["counts"]["abusive_groups"] == 240
+     assert manifest["counts"]["accounts"] == len(standard.accounts)
+     assert manifest["families"] == sorted(FAMILIES)
+-    assert manifest["channel_tags"] == {str(p): t for p, t in CHANNEL_TAGS.items()}
++    # SPEC §5.4: the manifest carries the frozen measured tags, and the design tags beside them
++    assert manifest["channel_tags"] == {str(p): t for p, t in MEASURED_TAGS.items()}
++    assert manifest["designed_channel_tags"] == {str(p): t for p, t in CHANNEL_TAGS.items()}
+ 
+ 
+ def test_standard_world_generates_quickly() -> None:
+--- a/tests/test_ground_truth_boundary.py
++++ b/tests/test_ground_truth_boundary.py
+@@ -1,11 +1,16 @@
+ """The ground-truth boundary (SPEC §9, AGENTS.md invariants). Coordinator-owned; never delegated.
+ 
+ Patterned on the vendored `backend/app/tests/test_ground_truth_boundary.py`:
+-  1. STATIC: only `testbed/eval/` imports a ground-truth reader or names the sealed stores;
+-     `testbed/world/persist.py` may import exactly the engine factory and the write-only sink;
+-     label-carrying generator types stay inside `testbed/world/` and `testbed/eval/`.
++  1. STATIC: only `testbed/eval/labels.py` and `stores.py` import a ground-truth reader, name the
++     sealed stores or touch a store's ground-truth path, and each of their openers calls
++     `guard_stores` first; `testbed/world/persist.py` may import exactly the engine factory and
++     the write-only sink; code outside `testbed/eval/` reaches only its label-free modules;
++     label-carrying generator types stay inside `testbed/world/` and `testbed/eval/`. Imports are
++     resolved to full names (relative imports included), as are attribute chains and dotted
++     string literals. The scan catches ordinary spellings, not deliberate obfuscation.
+   2. RUNTIME: the inference store has no ground-truth tables and can't read them.
+-  3. SEAL: `open_labels` refuses a `confirm-*` world unless `prereg/M6.md` seals the artifacts.
++  3. SEAL: `open_labels` and `verify_pair` refuse a `confirm-*` world unless `prereg/M6.md` seals
++     the artifacts.
+ """
+ 
+ from __future__ import annotations
+@@ -24,6 +29,7 @@
+ from sqlalchemy.orm import Session
+ 
+ from testbed.eval.labels import SealError, assign_units, check_seal, open_labels
++from testbed.eval.stores import verify_pair
+ from testbed.world.persist import Stores, persist
+ 
+ REPO = Path(__file__).resolve().parents[1]
+@@ -31,15 +37,19 @@
+ EVAL = TESTBED / "eval"
+ WORLD = TESTBED / "world"
+ PERSIST = WORLD / "persist.py"
++# The guarded ground-truth openers: the only modules that may read ground truth.
++GT_MODULES = {EVAL / "labels.py", EVAL / "stores.py"}
++GUARDED_OPENERS = {"testbed/eval/labels.py:open_labels", "testbed/eval/stores.py:verify_pair"}
+ 
+-# Ground-truth imports allowed outside testbed/eval/: module -> the only names it may import.
++# The only ground-truth imports persist.py may make: the engine factory and the write-only sink.
+ PERSIST_GT_IMPORTS = {
+-    "app.db.ground_truth_store": {"make_ground_truth_engine"},
+-    "app.db.ground_truth_writer": {"make_ground_truth_sink"},
++    "app.db.ground_truth_store.make_ground_truth_engine",
++    "app.db.ground_truth_writer.make_ground_truth_sink",
+ }
+ # Pure, label-free eval modules that other packages may import (labels arrive as arguments).
+ SHARED_EVAL_MODULES = {"testbed.eval.metrics", "testbed.eval.cv"}
+ SEALED_LITERALS = ("ground_truth", "split_group", "world_evaluation_receipt")
++GT_PATH_ATTRIBUTES = {"ground_truth_db", "ground_truth_url"}
+ # Label-carrying generator surface: only testbed/world/ and testbed/eval/ may touch it.
+ LABEL_NAMES = {
+     "GenLabel",
+@@ -50,6 +60,8 @@
+     "GroupDraw",
+ }
+ LABEL_ATTRIBUTES = {"labels", "split_groups", "fixtures"}
++# A path for the inline specimens below; the file itself is never read.
++SPECIMEN = TESTBED / "pipeline" / "specimen.py"
+ 
+ 
+ def _modules() -> Iterator[Path]:
+@@ -58,16 +70,48 @@
+             yield path
+ 
+ 
+-def _imports(tree: ast.Module) -> dict[str, set[str]]:
+-    """Imported module -> imported names (empty set for `import x`)."""
+-    out: dict[str, set[str]] = {}
++def _parse(path: Path) -> ast.Module:
++    return ast.parse(path.read_text())
++
++
++def _rel(path: Path) -> Path:
++    return path.relative_to(REPO)
++
++
++def _module_name(path: Path) -> str:
++    """Dotted name of a module under the repo (`testbed/eval/__init__.py` -> `testbed.eval`)."""
++    parts = _rel(path).with_suffix("").parts
++    return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
++
++
++def _resolve(node: ast.ImportFrom, path: Path) -> str:
++    """The absolute module of a `from` import; a relative one resolves against `path`'s package."""
++    if node.level == 0:
++        return node.module or ""
++    package = _module_name(path).split(".")
++    if path.name != "__init__.py":
++        package = package[:-1]
++    base = package[: max(0, len(package) - node.level + 1)]
++    return ".".join(base + ([node.module] if node.module else []))
++
++
++def _import_targets(tree: ast.Module, path: Path) -> tuple[set[str], dict[str, str]]:
++    """Fully qualified import targets (`from m import x` gives `m.x`), and each bound alias."""
++    targets: set[str] = set()
++    aliases: dict[str, str] = {}
+     for node in ast.walk(tree):
+         if isinstance(node, ast.Import):
+             for alias in node.names:
+-                out.setdefault(alias.name, set())
+-        elif isinstance(node, ast.ImportFrom) and node.module:
+-            out.setdefault(node.module, set()).update(a.name for a in node.names)
+-    return out
++                targets.add(alias.name)
++                if alias.asname:
++                    aliases[alias.asname] = alias.name
++        elif isinstance(node, ast.ImportFrom):
++            module = _resolve(node, path)
++            for alias in node.names:
++                name = f"{module}.{alias.name}" if module else alias.name
++                targets.add(name)
++                aliases[alias.asname or alias.name] = name
++    return targets, aliases
+ 
+ 
+ def _docstrings(tree: ast.Module) -> set[int]:
+@@ -89,65 +133,206 @@
+     ]
+ 
+ 
++def _targets(tree: ast.Module, path: Path) -> set[str]:
++    """Every full name the module reaches: import targets, outermost attribute chains rooted in a
++    name (an import alias expanded), and dotted `testbed.` string literals (`import_module`)."""
++    targets, aliases = _import_targets(tree, path)
++    attributes = [n for n in ast.walk(tree) if isinstance(n, ast.Attribute)]
++    inner = {id(n.value) for n in attributes}
++    for node in attributes:
++        if id(node) in inner:
++            continue
++        parts: list[str] = []
++        expr: ast.expr = node
++        while isinstance(expr, ast.Attribute):
++            parts.append(expr.attr)
++            expr = expr.value
++        if isinstance(expr, ast.Name):
++            targets.add(".".join([aliases.get(expr.id, expr.id), *reversed(parts)]))
++    targets.update(s for s in _literals(tree) if s.startswith("testbed."))
++    return targets
++
++
++def _eval_violations(tree: ast.Module, path: Path) -> set[str]:
++    """`testbed.eval` targets other than the shared label-free modules."""
++    return {
++        t
++        for t in _targets(tree, path)
++        if (t == "testbed.eval" or t.startswith("testbed.eval."))
++        and not any(t == m or t.startswith(f"{m}.") for m in SHARED_EVAL_MODULES)
++    }
++
++
++def _gt_imports(tree: ast.Module, path: Path) -> set[str]:
++    return {t for t in _import_targets(tree, path)[0] if "ground_truth" in t}
++
++
+ def _outside_eval() -> list[Path]:
+     return [p for p in _modules() if not p.is_relative_to(EVAL)]
+ 
+ 
++def _call_name(node: ast.Call) -> str | None:
++    if isinstance(node.func, ast.Name):
++        return node.func.id
++    return node.func.attr if isinstance(node.func, ast.Attribute) else None
++
++
+ # ---- 1. STATIC ------------------------------------------------------------------------------
+ 
+ 
+ def test_scan_covers_the_packages() -> None:
+     scanned = {p.relative_to(TESTBED).parts[0] for p in _modules()}
+     assert {"world", "pipeline", "features", "models", "eval"} <= scanned
+-    assert PERSIST in set(_modules())
++    assert PERSIST in set(_modules()) and GT_MODULES <= set(_modules())
+ 
+ 
+-def test_ground_truth_imports_stay_in_eval() -> None:
+-    for path in _outside_eval():
+-        imports = _imports(ast.parse(path.read_text()))
+-        gt = {m: names for m, names in imports.items() if "ground_truth" in m}
++def test_ground_truth_imports_stay_in_the_guarded_modules() -> None:
++    for path in _modules():
++        gt = _gt_imports(_parse(path), path)
+         if path == PERSIST:
+-            assert set(gt) <= set(PERSIST_GT_IMPORTS), f"persist.py imports {sorted(gt)}"
+-            for module, names in gt.items():
+-                assert names <= PERSIST_GT_IMPORTS[module], f"persist.py imports {names}"
+-        else:
+-            assert not gt, f"{path.relative_to(REPO)} imports {sorted(gt)}"
++            assert gt <= PERSIST_GT_IMPORTS, f"persist.py imports {sorted(gt - PERSIST_GT_IMPORTS)}"
++        elif path not in GT_MODULES:
++            assert not gt, f"{_rel(path)} imports {sorted(gt)}"
+ 
+ 
+ def test_eval_imports_from_outside_are_label_free() -> None:
+     for path in _outside_eval():
+-        for module, names in _imports(ast.parse(path.read_text())).items():
+-            if module == "testbed.eval":  # `from testbed.eval import x` imports submodule x
+-                used = {f"testbed.eval.{n}" for n in names}
+-            elif module.startswith("testbed.eval."):
+-                used = {module}
+-            else:
+-                continue
+-            assert used <= SHARED_EVAL_MODULES, f"{path.relative_to(REPO)} imports {used}"
++        found = _eval_violations(_parse(path), path)
++        assert not found, f"{_rel(path)} reaches {sorted(found)}"
+ 
+ 
+-def test_sealed_names_appear_only_in_eval() -> None:
+-    for path in _outside_eval():
+-        for literal in _literals(ast.parse(path.read_text())):
++def test_sealed_names_appear_only_in_the_guarded_modules() -> None:
++    for path in _modules():
++        if path in GT_MODULES:
++            continue
++        for literal in _literals(_parse(path)):
+             hits = [s for s in SEALED_LITERALS if s in literal.lower()]
+             if path == PERSIST and literal == "ground_truth.db":
+                 continue  # Stores.under names the file it creates for the write-only sink
+-            assert not hits, f"{path.relative_to(REPO)} has the literal {literal!r}"
++            assert not hits, f"{_rel(path)} has the literal {literal!r}"
+ 
+ 
++def test_ground_truth_paths_stay_in_the_guarded_modules() -> None:
++    for path in _modules():
++        if path in GT_MODULES or path == PERSIST:
++            continue
++        attributes = {n.attr for n in ast.walk(_parse(path)) if isinstance(n, ast.Attribute)}
++        found = attributes & GT_PATH_ATTRIBUTES
++        assert not found, f"{_rel(path)} reads {sorted(found)}"
++
++
++def test_every_ground_truth_engine_is_guarded() -> None:
++    """Each function that builds a ground-truth engine calls `guard_stores` before it. `persist`
++    is the exception: it refuses a store that already exists (tested below)."""
++    guarded = set()
++    for path in _modules():
++        tree = _parse(path)
++        engines = {
++            id(n)
++            for n in ast.walk(tree)
++            if isinstance(n, ast.Call) and _call_name(n) == "make_ground_truth_engine"
++        }
++        in_functions: set[int] = set()
++        for func in ast.walk(tree):
++            if not isinstance(func, ast.FunctionDef | ast.AsyncFunctionDef):
++                continue
++            lines: dict[str, list[int]] = {}
++            for n in ast.walk(func):
++                if isinstance(n, ast.Call) and (name := _call_name(n)) is not None:
++                    lines.setdefault(name, []).append(n.lineno)
++                    if id(n) in engines:
++                        in_functions.add(id(n))
++            if "make_ground_truth_engine" not in lines:
++                continue
++            where = f"{_rel(path)}:{func.name}"
++            if (path, func.name) == (PERSIST, "persist"):
++                continue
++            first_guard = min(lines.get("guard_stores", [10**9]))
++            assert first_guard < min(lines["make_ground_truth_engine"]), f"{where} is unguarded"
++            guarded.add(where)
++        assert engines <= in_functions, f"{_rel(path)} builds an engine outside a function"
++    assert guarded == GUARDED_OPENERS
++
++
+ def test_label_surface_stays_in_world_and_eval() -> None:
+     for path in _outside_eval():
+         if path.is_relative_to(WORLD):
+             continue
+-        tree = ast.parse(path.read_text())
+-        names = {n for found in _imports(tree).values() for n in found}
+-        assert not names & LABEL_NAMES, f"{path.relative_to(REPO)} imports {names & LABEL_NAMES}"
++        tree = _parse(path)
++        names = {t.rpartition(".")[2] for t in _import_targets(tree, path)[0]}
++        assert not names & LABEL_NAMES, f"{_rel(path)} imports {names & LABEL_NAMES}"
+         attributes = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+         assert not attributes & LABEL_ATTRIBUTES, (
+-            f"{path.relative_to(REPO)} reads {sorted(attributes & LABEL_ATTRIBUTES)}"
++            f"{_rel(path)} reads {sorted(attributes & LABEL_ATTRIBUTES)}"
+         )
+ 
+ 
++@pytest.mark.parametrize(
++    "source",
++    [
++        "from ..eval.labels import open_labels",
++        "from ..eval import labels",
++        "from .. import eval",
++        "from ..eval import *",
++        "from testbed import eval",
++        "from testbed.eval import labels",
++        "from testbed.eval import metrics, health",
++        "from testbed.eval.labels import open_labels",
++        "import testbed.eval.labels",
++        "import testbed.eval.stores as s",
++        "import testbed\ntestbed.eval.labels.open_labels",
++        "import testbed as t\nt.eval.labels.open_labels",
++        "import testbed.eval.metrics\ntestbed.eval.labels.open_labels",
++        "import importlib\nimportlib.import_module('testbed.eval.labels')",
++    ],
++)
++def test_eval_guard_catches_label_access(source: str) -> None:
++    assert _eval_violations(ast.parse(source), SPECIMEN)
++
++
++@pytest.mark.parametrize(
++    "source",
++    [
++        "from ..eval.metrics import auc",
++        "from ..eval import metrics, cv",
++        "from testbed.eval import metrics",
++        "from testbed.eval.cv import oof_scores",
++        "import testbed.eval.metrics\ntestbed.eval.metrics.auc",
++        "from ..features import f12",
++        "from . import render",
++    ],
++)
++def test_eval_guard_allows_the_shared_modules(source: str) -> None:
++    assert not _eval_violations(ast.parse(source), SPECIMEN)
++
++
++@pytest.mark.parametrize(
++    "source",
++    [
++        "from app.db import ground_truth_reader",
++        "import app.db.ground_truth_reader as r",
++        "from app.db.ground_truth_reader import load_labels",
++        "from app.db.ground_truth_store import make_ground_truth_engine",
++    ],
++)
++def test_ground_truth_guard_catches_imports(source: str) -> None:
++    assert _gt_imports(ast.parse(source), SPECIMEN)
++
++
++def _from(source: str) -> ast.ImportFrom:
++    node = ast.parse(source).body[0]
++    assert isinstance(node, ast.ImportFrom)
++    return node
++
++
++def test_relative_imports_resolve_against_the_package() -> None:
++    init = EVAL / "__init__.py"
++    assert _resolve(_from("from ..eval import x"), SPECIMEN) == "testbed.eval"
++    assert _resolve(_from("from . import x"), SPECIMEN) == "testbed.pipeline"
++    assert _resolve(_from("from . import x"), init) == "testbed.eval"
++    assert _resolve(_from("from .labels import x"), init) == "testbed.eval.labels"
++
++
+ # ---- 2. RUNTIME -----------------------------------------------------------------------------
+ 
+ 
+@@ -182,6 +367,18 @@
+     assert not (tmp_path / "ground_truth.db").exists()
+ 
+ 
++def test_verify_pair_refuses_missing_stores(tmp_path: Path) -> None:
++    with pytest.raises(FileNotFoundError):
++        verify_pair(Stores.under(tmp_path))
++    assert not (tmp_path / "ground_truth.db").exists()
++
++
++def test_persist_refuses_an_existing_store(stores: Stores) -> None:
++    world = generate_world(1, "min")
++    with pytest.raises(FileExistsError):
++        persist(world, build_manifest(world, 1, "min"), stores)
++
++
+ # ---- 3. SEAL --------------------------------------------------------------------------------
+ 
+ 
+@@ -234,6 +431,20 @@
+         open_labels(stores, repo_root=tmp_path)
+ 
+ 
++def test_verify_pair_is_sealed(tmp_path: Path) -> None:
++    stores = _confirm_world(tmp_path)
++    with pytest.raises(SealError):
++        verify_pair(stores, repo_root=tmp_path)  # no prereg/M6.md
++
++    artifact = tmp_path / "frozen.txt"
++    artifact.write_text("frozen\n")
++    _write_seal(tmp_path, f"{'0' * 64}  frozen.txt\n")
++    with pytest.raises(SealError, match="changed"):
++        verify_pair(stores, repo_root=tmp_path)
++    _write_seal(tmp_path, f"{hashlib.sha256(artifact.read_bytes()).hexdigest()}  frozen.txt\n")
++    assert verify_pair(stores, repo_root=tmp_path).world_id
++
++
+ def test_assign_units_excludes_mixed_clusters() -> None:
+     group_of = {"a": "g1", "b": "g1", "c": "g2"}
+     result = assign_units([("u1", ["a", "b"]), ("u2", ["b", "c"]), ("u3", ["c"])], group_of)
+--- a/tests/test_health.py
++++ b/tests/test_health.py
+@@ -710,6 +710,8 @@
+         assert record["measured"] in {"T", "F", "M"}
+         assert record["designed"] == health.CHANNEL_TAGS[int(pair)]
+         assert record["matches"] is (record["measured"] == record["designed"])
++        assert record["frozen"] == health.MEASURED_TAGS[int(pair)]
++        assert record["matches_frozen"] is (record["measured"] == record["frozen"])
+         assert (record["n_pos"], record["n_neg"]) == ((8, 32) if pair in "15" else (4, 16))
+     assert report["pairs"]["2"]["worlds"] == "channel"
+     assert report["pairs"]["1"]["worlds"] == "standard pooled"
+--- a/tests/test_metrics.py
++++ b/tests/test_metrics.py
+@@ -3,6 +3,7 @@
+ from __future__ import annotations
+ 
+ import itertools
++import math
+ from statistics import NormalDist
+ 
+ import numpy as np
+@@ -222,6 +223,54 @@
+     assert failures / 400 <= 0.05 + 0.03
+ 
+ 
++def _sparse_exchangeability_case(k: int) -> tuple[np.ndarray, np.ndarray]:
++    """Round-1 review specimen: K positives at +1 and 40 - K at -1 against 160 zeros. Each
++    +1 beats every zero and each -1 loses to every zero, so AUC = K / 40 (0.5 at K = 20), while the
++    distributions of the two samples differ for every K."""
++    return np.array([1.0] * k + [-1.0] * (40 - k)), np.zeros(160)
++
++
++def _exact_sparse_p(k: int) -> float:
++    """Exact two-sided permutation p of |AUC - 0.5| for the specimen, summing the multivariate
++    hypergeometric over how many +1 (a) and -1 (b) scores fall in the positive class of 40."""
++    observed = abs(auc(*_sparse_exchangeability_case(k)) - 0.5)
++    total = math.comb(200, 40)
++    hits = 0
++    for a in range(0, min(k, 40) + 1):
++        for b in range(0, min(40 - k, 40 - a) + 1):
++            z = 40 - a - b
++            if z > 160:
++                continue
++            pos = np.array([1.0] * a + [-1.0] * b + [0.0] * z)
++            neg = np.array([1.0] * (k - a) + [-1.0] * (40 - k - b) + [0.0] * (160 - z))
++            if abs(auc(pos, neg) - 0.5) >= observed - 1e-12:
++                hits += math.comb(k, a) * math.comb(40 - k, b) * math.comb(160, z)
++    return hits / total
++
++
++def test_null_rule_is_an_exchangeability_test_not_an_auc_interval() -> None:
++    """Round-1 finding 4: the rule's p is the exact permutation (exchangeability) p, not an AUC
++    interval's. If positives are ±1 with equal probability against zeros, the population AUC is
++    0.5 but the distributions differ. The sample 24 × (+1), 16 × (−1) has AUC 0.6 and exact
++    two-sided p = 0.005092447416579459 < 0.05 / 6, so the row fails."""
++    pos, neg = _sparse_exchangeability_case(24)
++    exact = 0.005092447416579459
++    assert _exact_sparse_p(24) == pytest.approx(exact, rel=1e-12)
++    r = null_rule(pos, neg, tests=6)
++    assert r.auc == pytest.approx(0.6)
++    assert r.method == "permutation" and not r.passed
++    assert exact < 0.05 / 6
++    # Monte Carlo p: n_perm = max(PERM_FLOOR, ceil(PERM_FACTOR · tests / alpha)) = 20,000 draws.
++    # Its sd is sqrt(p(1-p)/n_perm) ≈ 5.0e-4; allow 4 sd plus the (1 + hits)/(n_perm + 1) bias.
++    n_perm = max(PERM_FLOOR, math.ceil(metrics.PERM_FACTOR / r.alpha_adj))
++    assert n_perm == PERM_FLOOR
++    tol = 4 * math.sqrt(exact * (1 - exact) / n_perm) + 1 / (n_perm + 1)
++    assert r.p == pytest.approx(exact, abs=tol)
++    # 20 × (+1) and 20 × (−1): AUC is exactly 0.5 and the rule passes
++    even = null_rule(*_sparse_exchangeability_case(20), tests=6)
++    assert even.auc == 0.5 and even.passed
++
++
+ def test_null_rule_rejects_bad_arguments() -> None:
+     with pytest.raises(ValueError):
+         null_rule([1, 2], [1, 2], tests=0)
