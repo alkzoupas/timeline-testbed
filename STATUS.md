@@ -36,38 +36,41 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
 - **M8, a Claude Haiku 5.5 pilot** (owner, 2026-10-22), via the owner's subscription; zero-shot plus
   held-out few-shot, pilot first. The plan is in `context/m8-haiku-kickoff.md`; results go to
   `reports/M8.md`.
-  - Steps 1–3 done: pivot, exception and isolation lines in DECISIONS.md; the AGENTS.md exception;
-    the owner's login (both `auth status` loggedIn, main intact, Pro); the smoke, 50 calls, all ok
-    and parsed (`runs/m8-smoke/`). **Repeatability is poor**: re-scored units correlate at 0.22
-    (10 units), so a single draw is mostly noise. See `reports/M8.md`.
-  - Owner (2026-10-22): *k* = 3 draws per unit (1,920 calls), with the go for steps 4–5, the
-    prompt freeze through the pilot. **Next: a fresh chat** from `context/m8-haiku-kickoff.md`,
-    rewritten for step 4 onward: the prompt freeze, the Orca worker, a 24-call end-to-end check,
-    `prereg/M8.md`, then the pilot.
+  - Steps 1–3 done (smoke, 50 calls, `runs/m8-smoke/`; retest Pearson 0.22, so *k* = 3 draws).
+    Owner's go covers steps 1–5, through the 1,920-call pilot (`context/m8-haiku-kickoff.md`).
+  - Step 1 done: prompt `m8-v1` frozen in `testbed/models/haiku_prompt.py` (sha256 `028db033…`,
+    system `0f6af5ef…` = the smoke's), with the route constants; committed by the owner (`0b84bd1`).
+  - Step 2: Orca run `run_392d9c02ec97`. Worker `ctx_c8516f5bd037` (claude-sonnet-5-5, high) wrote
+    `testbed/eval/haiku.py`, `testbed/models/haiku_run.py` and their tests. My review asked for
+    fixes F1–F5 (one pinned CLI binary, `api_error_status`, an unparsed-streak stop, route check in
+    the scorer, token sums); fix worker `ctx_b6e0640cc6dc` (launch.effective claude-sonnet-5-5,
+    high) did them. I reviewed them, rewrapped one `haiku.py` docstring paragraph and ran the
+    checks below: **accepted**, ready to commit. Both worker terminals are yours (`user_takeover`).
+  - Then, after you commit step 2: step 3, the 24-call end-to-end check; step 4, `prereg/M8.md`
+    (draft ready; go-bar at the 1.25th percentile, Bonferroni over the two variants as G2);
+    step 5, the pilot.
 - The `runs/confirm-*` worlds stay unopened.
 
 ## Open owner decisions
 
-- M8: none open; start the fresh chat when ready.
+- M8: none open.
 - FYI: a Claude Code background session (pid 78316, daemon-forked, started 07:28, idle since 08:24)
   has this repo as its cwd. It's not the scorer; left running. The "Sonnet session" I flagged
   earlier was the M7 Orca worker's ended transcript; there was no process to kill.
 - Optional: delete `runs/superseded-round1/` and `runs/m4-*-superseded/` (gitignored data; your go
   needed).
 
-## Files changed since `ccef012` (uncommitted)
+## Files changed since `0b84bd1` (uncommitted)
 
-- Coordinator: `STATUS.md`; `DECISIONS.md` (four lines: M8 pivot, hosted-model exception, route
-  isolation, *k* = 3); `AGENTS.md` (the exception, under "Invariants"; owner's go 2026-10-22);
-  `reports/M8.md` (new: the smoke); `context/m8-haiku-kickoff.md` (rewritten for step 4 onward).
+- `STATUS.md`. Step 2, accepted: `testbed/eval/haiku.py`, `testbed/models/haiku_run.py`,
+  `tests/test_haiku_eval.py`, `tests/test_haiku_run.py`.
 
 ## Last checks (2026-10-22)
 
+- Step 2: `make test` `763 passed in 170.51s (0:02:50)`; after the rewrap, haiku + boundary tests
+  `184 passed in 14.62s`, lint `All checks passed!`, typecheck `Success: no issues found in 71
+  source files`, `ruff format --check` `71 files already formatted`; exit 0 each.
 - M8 smoke: `smoke.py run` exit 0 (iso 2 + iso2 1 + 47 calls, every rc 0); `summarize.py` exit 0.
-  Docs-only edits since `ccef012`, so `make test`, `make lint` and `make typecheck` weren't re-run.
-- After accepting the figure code: `make test` `631 passed in 137.64s (0:02:17)`, exit 0;
-  `make lint` `All checks passed!`, `make typecheck` `Success: no issues found in 65 source files`,
-  `ruff format --check testbed tests` `65 files already formatted`, exit 0 each.
 - Figure: `python -m testbed.eval.result --r0 runs/m2-r0/r0.json --r2 runs/m4-g2/report.json
   runs/m4-r2-s0.5/r2.json --out reports/RESULT-auc-vs-s.svg`, exit 0. Baselines matched R0 at every
   R2 s, and the printed points match RESULT.md's table.
