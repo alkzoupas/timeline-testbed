@@ -30,42 +30,41 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
   the docstring path; the checks below are my own runs. The worker was released.
 - Worlds from before the M1 manifest fix sit in `runs/superseded-round1/`; safe to delete. The
   pre-fix embeddings are kept in `runs/m4-embed-superseded/`.
+- **M8 done; the Claude Haiku 5.5 pilot is NO-GO** (`reports/M8.md`; prereg `ef48f91`, code
+  `070a94d`; `runs/m8-pilot/`). 1,920 calls on seed1's T units via your subscription, 59 min, all
+  parsed first try, no errors, CLI 2.1.308 throughout. Held-out primary: zero-shot 0.561 (bound
+  0.487), few-shot 0.553 (0.479); F64 trees 0.517. M8 stops; no full run. Reported, not claimed:
+  pair 3 alone stands out (few-shot 0.84 [0.74, 0.92], zero-shot 0.68; trees 0.56), post hoc, on
+  a gate world, with no *s* = 0 control. Retest reliability 0.49–0.59 (the smoke's 0.22 was low).
+  - Driver and scorer by Orca workers `ctx_c8516f5bd037` and `ctx_b6e0640cc6dc` (run
+    `run_392d9c02ec97`, launch.effective claude-sonnet-5-5, high); their terminals are yours.
 
 ## Next
 
-- **M8, a Claude Haiku 5.5 pilot** (owner, 2026-10-22), via the owner's subscription; zero-shot plus
-  held-out few-shot, pilot first. The plan is in `context/m8-haiku-kickoff.md`; results go to
-  `reports/M8.md`.
-  - Smoke done (50 calls, `runs/m8-smoke/`; retest Pearson 0.22, so *k* = 3 draws). Owner's go
-    covers kickoff steps 1–5, through the 1,920-call pilot (`context/m8-haiku-kickoff.md`).
-  - Step 1: prompt `m8-v1` frozen in `testbed/models/haiku_prompt.py` (sha256 `028db033…`, system
-    `0f6af5ef…` = the smoke's), with the route constants (`0b84bd1`).
-  - Step 2: driver, scorer and tests (`070a94d`), by Orca workers `ctx_c8516f5bd037` and, for my
-    review's fixes F1–F5, `ctx_b6e0640cc6dc` (run `run_392d9c02ec97`; launch.effective
-    claude-sonnet-5-5, high). Accepted on my own checks. Both terminals are yours (`user_takeover`).
-  - Step 3: the 24-call end-to-end check passed (`runs/m8-check/`): 24 of 24 parsed first try, CLI
-    2.1.308 throughout; `score` dry run exit 0. Few-shot answered 93–96 on 11 of 12 draws (a risk,
-    stated in the prereg; the prompt stays frozen).
-  - Step 4: `prereg/M8.md` written (pilot job `runs/m8-pilot/jobs.jsonl` `3bfda62f…`; GO if either
-    variant's lower bound at the 1.25th percentile is above 0.5), with its DECISIONS line.
-  - **Next: you commit `prereg/M8.md`; then step 5**, the pilot (1,920 calls, about 1 h at five at
-    once; p50 8.4 s per call), then `score` once, `reports/M8.md` and a DECISIONS verdict line.
+- Nothing is running. G2 and M8, the pre-registered lines, are closed; what follows is your call.
 - The `runs/confirm-*` worlds stay unopened.
 
 ## Open owner decisions
 
-- M8: none open.
+- **Pair 3, optional pivot:** follow up Haiku's held-out pair-3 signal with a DECISIONS pivot note,
+  then a new prereg on worlds the pilot didn't touch (`m2-dev-s0.75-seed2` plus fresh seeds), with
+  the *s* = 0 control. Or close M8 as is. `reports/RESULT.md` predates M8: add a line if you want.
 - FYI: a Claude Code background session (pid 78316, daemon-forked, started 07:28, idle since 08:24)
   has this repo as its cwd. It's not the scorer; left running. The "Sonnet session" I flagged
   earlier was the M7 Orca worker's ended transcript; there was no process to kill.
 - Optional: delete `runs/superseded-round1/` and `runs/m4-*-superseded/` (gitignored data; your go
   needed).
 
-## Files changed since `070a94d` (uncommitted)
+## Files changed since `ef48f91` (uncommitted)
 
-- `STATUS.md`, `DECISIONS.md` (one line: the M8 prereg), `prereg/M8.md` (new).
+- `reports/M8.md` (rewritten: the pilot, one page), `DECISIONS.md` (one line: the verdict),
+  `STATUS.md`.
 
 ## Last checks (2026-10-22)
+
+- Pilot: driver exit 0, `done ok 1920, done unparsed 0, remaining 0, errors this run 0, calls this
+  run 1920; wall p50/max: 8.1/102.1 s`; `score` exit 0 at 14:18, `M8 pilot NO-GO`, `lower bounds
+  at level 0.975 (GO above 0.5): zero_shot 0.4873 few_shot 0.4795`; `report.json` `d9888902…`.
 
 - Step 2: `make test` `763 passed in 170.51s (0:02:50)`; after the rewrap, haiku + boundary tests
   `184 passed in 14.62s`, lint `All checks passed!`, typecheck `Success: no issues found in 71
