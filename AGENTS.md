@@ -19,10 +19,10 @@ and STATUS.md first. Read DECISIONS.md and `context/` as needed.
 - **Confirmation worlds (`runs/confirm-*`)** are opened only by the M6 scorer, after the M6 freeze.
 - **No paid APIs, hosted models or GPU rentals.** Package installs and model downloads need the
   owner's go in that turn.
-  - Exception (owner, 2026-10-22), for M8 scoring only: Claude Haiku 5.5 (`claude-haiku-5-5`)
-    through the owner's Claude subscription. It runs as headless Claude Code with
-    `CLAUDE_CONFIG_DIR=~/.claude-haiku-scorer` and `--safe-mode --tools "" --strict-mcp-config
-    --no-session-persistence`, from an empty temp directory outside the repo whose path names
+  - Exception (owner, 2026-10-22; extended to M9, 2026-10-30), for M8 and M9 scoring only: Claude
+    Haiku 5.5 (`claude-haiku-5-5`) through the owner's Claude subscription. It runs as headless
+    Claude Code with `CLAUDE_CONFIG_DIR=~/.claude-haiku-scorer` and `--safe-mode --tools ""
+    --strict-mcp-config --no-session-persistence`, from an empty temp directory outside the repo whose path names
     nothing. No API keys and no other hosted model. Haiku sees only the frozen prompt, the renders
     and the pre-registered examples, plus what Claude Code adds to every call and no flag removes:
     an environment block (working directory, platform, date, model) and a note with the account

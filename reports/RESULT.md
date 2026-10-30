@@ -60,6 +60,15 @@ F64 in-family (0.88–0.94, against 0.86–0.94 for logistic and trees) and a li
   T family. Whatever it learns is specific to each mechanism, not a shared "one operator" signal
   (an interpretation, not a tested claim).
 
+## Addendum: M8, Claude Haiku 5.5 (2026-10-22)
+
+A hosted reference point after a pivot, not SPEC §2's small local model, and no rescue of G2. On
+the 320 T units of `m1-dev-s0.75-seed1`, held-out, the pilot is **NO-GO** as pre-registered
+(`prereg/M8.md`). Zero-shot reaches 0.561 (bound 0.487) and few-shot 0.553 (0.479), against 0.517
+for F64 trees; neither difference over trees excludes 0. Pair 3 alone stands out (few-shot 0.84
+[0.74, 0.92], zero-shot 0.68, trees 0.56). That subgroup is post hoc, on a gate world, with no
+*s* = 0 control, so it is reported, not claimed (`reports/M8.md`).
+
 ## Limits
 
 - One model series (4-bit MLX), one prompt, one probe: L2 logistic on the layer-16 mean, selected on
