@@ -47,19 +47,23 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
   - [x] 24-call end-to-end check passed (`runs/m9-check/`); **frozen** (prereg `d20f7bbd…`).
   - [x] Seeds (`secrets`): s = 0.75 `1759212321`, `1841874529`; s = 0 `98816701`. All three
     worlds pass health; `select --mode confirm` exit 0, 1,200 calls (jobs `5d7d5cfe…`).
-  - [ ] Driver running (started 2026-10-30, `runs/m9-logs/driver.log`); then score once.
+  - [x] Driver: 759 calls, then a 429 at 12:29 PDT (exit 3); resumed 14:19 on the owner's go, finished
+    `done ok 1200, done unparsed 0, remaining 0, errors this run 0`. CLI 2.1.314 throughout.
+  - [x] **Scored once: M9 CONFIRMED** (`runs/m9-confirm/scored/`, `report.json` `f533434d…`).
+    Few-shot 0.758 [0.679, 0.832]; minus F64 logistic lower 0.129, minus trees lower 0.136 (F64
+    0.511 / 0.502); s = 0 control 0.571 [0.445, 0.697]. 80 abusive + 80 legitimate groups.
+    Zero-shot 0.577 (not gating). AUCs recomputed by hand from `scores.jsonl`: match.
+  - [x] `reports/M9.md`; RESULT.md headline + M9 addendum (as the prereg specified); DECISIONS line.
 - The `runs/confirm-*` worlds stay unopened.
 
 ## Open owner decisions
 
-- None now. M8 itself is closed as is (owner, `1fd10df`).
+- Whether to follow up pair 3 (e.g. which render features carry it); otherwise the project closes. M8 itself is closed as is (owner, `1fd10df`).
 
-## Files changed since `1fd10df` (uncommitted)
+## Files changed since `4aeb6d7` (uncommitted)
 
-- `reports/RESULT.md` (an M8 addendum), `STATUS.md`, `AGENTS.md` (exception to M9),
-  `DECISIONS.md` (four lines), `prereg/M9.md`, `testbed/eval/haiku_m9.py`,
-  `tests/test_haiku_m9.py` (new). Deleted (gitignored, owner's go 2026-10-30):
-  `runs/superseded-round1/`, `runs/m4-embed-superseded/`, `runs/m4-tune-superseded/`.
+- `reports/M9.md` (new), `reports/RESULT.md` (headline + M9 addendum), `DECISIONS.md` (one line),
+  `STATUS.md`.
 
 ## Last checks (2026-10-30)
 

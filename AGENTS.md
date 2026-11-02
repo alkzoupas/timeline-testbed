@@ -54,7 +54,7 @@ and STATUS.md first. Read DECISIONS.md and `context/` as needed.
 - **Groundwork:** Claude Haiku 5.5 (`--model claude-haiku-5-5 --effort medium`), only for rudimentary
   mechanical work: scaffolding, boilerplate, renames, lint fixes. Never logic that SPEC.md defines.
 - **Reviewer:** a supervised Orca Codex worker on GPT-6.1 Sol (`--agent codex --model gpt-6.1-sol
-  --effort high`), through the orca-review and adversarial-review skills.
+  --effort medium`), through the orca-review and adversarial-review skills.
 - **Check each launch:** report the model and effort shown in the receipt's `launch.effective`, not
   the requested values.
 - **Never delegated:** gate thresholds and `prereg/`, the generator freeze and its hash, the

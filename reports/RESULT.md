@@ -15,7 +15,10 @@ SPEC §10 M7, written after the kill gate G2 failed (§7.1). Generator `tt-gen-v
 The oracle bound is 0.90. G2 failed as pre-registered: neither model's paired lower bound over either
 F64 model is above 0, and both pass the *s* = 0 control (`reports/M4-probe.md`). This is a null:
 **on families it wasn't trained on, a probe on a small local LLM adds nothing over features, even
-when the signal is only in the timeline.**
+when the signal is only in the timeline.** The project's headline is **null, except one
+timeline-only mechanism a hosted model reads without training on it**: Claude Haiku 5.5 few-shot
+ranks pair 3 at 0.758 [0.679, 0.832] on fresh worlds, where both F64 models are at chance
+(M9, pre-registered; addendum below).
 
 ## Figure: T-family AUC against *s*, held-out regime (`RESULT-auc-vs-s.svg`)
 
@@ -67,7 +70,18 @@ the 320 T units of `m1-dev-s0.75-seed1`, held-out, the pilot is **NO-GO** as pre
 (`prereg/M8.md`). Zero-shot reaches 0.561 (bound 0.487) and few-shot 0.553 (0.479), against 0.517
 for F64 trees; neither difference over trees excludes 0. Pair 3 alone stands out (few-shot 0.84
 [0.74, 0.92], zero-shot 0.68, trees 0.56). That subgroup is post hoc, on a gate world, with no
-*s* = 0 control, so it is reported, not claimed (`reports/M8.md`).
+*s* = 0 control, so it is reported, not claimed (`reports/M8.md`). M9 tested it (below).
+
+## Addendum: M9, pair 3 confirmed (2026-10-30)
+
+A pivot to one pre-specified hypothesis (`prereg/M9.md`, frozen before any world or call), on three
+fresh worlds: two at *s* = 0.75 (80 abusive + 80 legitimate pair 3 groups) and an *s* = 0 control
+(40 + 40). Same prompt, examples (pairs 4–6 only) and route as M8; 1,200 calls, all parsed.
+**CONFIRMED**: few-shot 0.758 [0.679, 0.832]; over F64 logistic (0.511) +0.246 [0.129, 0.357] and
+over trees (0.502) +0.256 [0.136, 0.364]; control 0.571 [0.445, 0.697], containing 0.5. Each world
+clears 0.5 alone (0.80, 0.72). Zero-shot (0.577, not gating) doesn't beat F64. It covers one
+family, from a hosted model rather than SPEC §2's, and the small control rules out only a large
+artifact (`reports/M9.md`).
 
 ## Limits
 
@@ -85,6 +99,7 @@ for F64 trees; neither difference over trees excludes 0. Pair 3 alone stands out
 M5 (R3, G3) and M6 (the `runs/confirm-*` worlds stay unopened); R1 and Nimble; the Tier 4 transfer
 check (default no; only if G3 passed). Sources: `runs/m2-r0/r0.json` (`4f3f2ddc…`),
 `runs/m4-g2/g2.json` (`b23f922c…`), `runs/m4-g2/report.json` (`2bec71b0…`),
-`runs/m4-r2-s0.5/r2.json` (`00ac6cb8…`). Figure: `python -m testbed.eval.result --r0
+`runs/m4-r2-s0.5/r2.json` (`00ac6cb8…`), `runs/m8-pilot/scored/report.json` (`d9888902…`),
+`runs/m9-confirm/scored/report.json` (`f533434d…`). Figure: `python -m testbed.eval.result --r0
 runs/m2-r0/r0.json --r2 runs/m4-g2/report.json runs/m4-r2-s0.5/r2.json --out
 reports/RESULT-auc-vs-s.svg`.
