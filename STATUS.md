@@ -37,7 +37,7 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
   - Driver and scorer by Orca workers `ctx_c8516f5bd037` and `ctx_b6e0640cc6dc` (run
     `run_392d9c02ec97`, launch.effective claude-sonnet-5-5, high); their terminals are yours.
 
-## Next
+## M9 (done)
 
 - **M9: confirm pair 3** (owner's go 2026-10-30; DECISIONS pivot note; `prereg/M9.md` drafted).
   Haiku few-shot on pair 3, fresh worlds (two at *s* = 0.75, one *s* = 0 control), 1,200 calls.
@@ -54,25 +54,27 @@ or fine-tuned) detects abuse whose evidence is timeline-only better than the fro
     0.511 / 0.502); s = 0 control 0.571 [0.445, 0.697]. 80 abusive + 80 legitimate groups.
     Zero-shot 0.577 (not gating). AUCs recomputed by hand from `scores.jsonl`: match.
   - [x] `reports/M9.md`; RESULT.md headline + M9 addendum (as the prereg specified); DECISIONS line.
-- The `runs/confirm-*` worlds stay unopened.
 
-## Open owner decisions
+## Closed and published (2026-11-02)
 
-- Whether to follow up pair 3 (e.g. which render features carry it); otherwise the project closes. M8 itself is closed as is (owner, `1fd10df`).
+- **The project is closed and published** (owner) as the public GitHub repo
+  `alkzoupas/timeline-testbed`; `runs/confirm-*` never opened. README.md rewritten for outside
+  readers, LICENSE (MIT, as EntitlementShield), `.claude/` gitignored, the 429 quote in
+  `reports/M9.md` shortened. No result, prereg, frozen code or `runs/` changed.
+  `reviews/` keeps its machine paths (recorded sha256s); KICKOFF.md kept. Open owner decisions: none.
 
-## Files changed since `4aeb6d7` (uncommitted)
+## Last checks (2026-11-02)
 
-- `reports/M9.md` (new), `reports/RESULT.md` (headline + M9 addendum), `DECISIONS.md` (one line),
-  `STATUS.md`.
+- `make test` `803 passed in 179.91s`; `make lint` `All checks passed!`; `make typecheck` `Success:
+  no issues found in 73 source files`; `ruff format --check testbed tests` `73 files already
+  formatted` (no `make format` target); `make vendor-check`; exit 0 each.
+- README commands rerun in a temp dir: `run_world` seed 301 byte-identical to
+  `runs/m4-tune-s0.75-seed301`; `health world` exit 0; `r0` exit 0; `haiku_m9 select --mode check`
+  exit 0, `jobs.jsonl` identical to `runs/m9-check/`. No Haiku calls were made.
 
-## Last checks (2026-10-30)
+## Earlier checks (2026-10-22 and 10-30; details in `reports/M8.md`, `M9.md`, `M4-probe.md`)
 
-- M9 code: `make test` `803 passed in 159.60s`, lint `All checks passed!`, typecheck `Success: no
-  issues found in 73 source files`, format `73 files already formatted`; exit 0 each.
-- M9 check: driver exit 0 (`done ok 24, done unparsed 0, remaining 0, errors this run 0`); score
-  exit 0 (`M9 CHECK (not a result)`, `8154f5b1…`), matched by hand.
-
-## Earlier checks (2026-10-22; details in `reports/M8.md`, `reports/M4-probe.md`)
-
+- M9 (10-30): `make test` `803 passed in 159.60s`; check driver exit 0 (`done ok 24`); check score
+  exit 0 (`M9 CHECK (not a result)`, `8154f5b1…`).
 - M8 pilot: driver exit 0 (`done ok 1920`, no errors); `score` exit 0, `M8 pilot NO-GO`
   (`d9888902…`). G2: exit 0, `G2 FAIL` (`g2.json` `b23f922c…`).
